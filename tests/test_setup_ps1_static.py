@@ -99,10 +99,13 @@ def test_all_non_ascii_ps1_files_keep_bom() -> None:
     """
     import subprocess
 
-    out = subprocess.run(["git", "ls-files", "*.ps1"], cwd=PROJECT_ROOT,
-                         capture_output=True, text=True, timeout=60).stdout
+    out = subprocess.run(["git", "ls-files", "-z", "*.ps1"], cwd=PROJECT_ROOT,
+                         capture_output=True, check=True, timeout=60).stdout
     checked = 0
-    for rel in out.split():
+    for raw in out.split(b"\0"):
+        if not raw:
+            continue
+        rel = raw.decode("utf-8")
         if "vendor/" in rel:
             continue
         data = (PROJECT_ROOT / rel).read_bytes()

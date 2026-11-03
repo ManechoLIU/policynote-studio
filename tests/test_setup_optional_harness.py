@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_skip_run_installs_web_without_overwriting_native_selection(tmp_path, runtime, existing):
     shutil.copy(ROOT / "setup.sh", tmp_path / "setup.sh")
     (tmp_path / "web" / "frontend").mkdir(parents=True)
-    (tmp_path / ".env.example").write_text("ANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY\n", encoding="utf-8")
+    (tmp_path / ".env.example").write_text("ANTHROPIC_API_KEY=sk-public-replace_me\n", encoding="utf-8")
     env_file = tmp_path / ".env"
     env_file.write_text("EASEL_CHAT_TRANSPORT=http\nOPENAI_API_KEY=keep-secret\n", encoding="utf-8")
     original_env = env_file.read_bytes()
@@ -108,7 +108,7 @@ def test_windows_skip_executes_real_branch_without_calling_openclaw(tmp_path, ex
     executable = shutil.which("powershell") or shutil.which("pwsh")
     if executable is None:
         pytest.skip("Requires PowerShell; exercised in Windows CI")
-    (tmp_path / ".env.example").write_text("ANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY\n", encoding="utf-8")
+    (tmp_path / ".env.example").write_text("ANTHROPIC_API_KEY=sk-public-replace_me\n", encoding="utf-8")
     env_file = tmp_path / ".env"
     env_file.write_text("OPENAI_API_KEY=keep-secret\n", encoding="utf-8")
     original = env_file.read_bytes()

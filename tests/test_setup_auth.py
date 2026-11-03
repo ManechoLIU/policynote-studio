@@ -3,7 +3,7 @@
 钉住四个真实踩过的坑：
 
 1. setup.sh 用 `-z ANTHROPIC_API_KEY` 判「没配 Anthropic」。.env.example 默认就带着
-   `ANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY`，用户照 README 加了 OpenAI 兼容服务但没删那行时，
+   `ANTHROPIC_API_KEY=sk-public-replace_me`，用户照 README 加了 OpenAI 兼容服务但没删那行时，
    整条 OpenAI 分支被跳过 —— provider 一个字没写，却照样把 primary 设成了 openai/xxx，
    对话直接报 "No route-compatible authentication source is configured for openai"。
 2. `easel doctor` 只静态查 .env，查不出上面那种「.env 填了但 openclaw 没写」，于是全绿。
@@ -114,7 +114,7 @@ def _run_auth(tmp_path: Path, **env: str) -> tuple[str, dict[str, str]]:
     return proc.stdout, written
 
 
-PLACEHOLDER = "PUBLIC_EXAMPLE_API_KEY"
+PLACEHOLDER = "sk-public-replace_me"
 DEEPSEEK = {
     "OPENAI_API_KEY": "sk-deepseek-fake",
     "OPENAI_BASE_URL": "https://api.deepseek.com/v1",
@@ -168,7 +168,7 @@ def test_anthropic_takes_priority_over_openai(tmp_path):
 
 
 @pytest.mark.parametrize("value", [
-    "REPLACE_ME", "PUBLIC_EXAMPLE_API_KEY", "replace_me",
+    "REPLACE_ME", "sk-public-replace_me", "replace_me",
     "your-api-key", "YOUR_API_KEY", "your api key", "",
 ])
 @needs_bash
@@ -198,7 +198,7 @@ def test_setup_sh_has_no_bare_placeholder_comparisons():
     """别再回到「各写各的 != 占位符」：认证判定统一走 usable_key。"""
     text = SETUP_SH.read_text(encoding="utf-8")
     body = "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
-    assert "PUBLIC_EXAMPLE_API_KEY" not in body, "认证判定里仍有硬编码占位符比较"
+    assert "sk-public-replace_me" not in body, "认证判定里仍有硬编码占位符比较"
 
 
 # ── doctor：.env 填了 ≠ openclaw 真写了 ────────────────────────────────

@@ -76,7 +76,7 @@ def test_openai_without_authoritative_url_does_not_move_env_key_to_mirror(sandbo
 
 
 @pytest.mark.parametrize("slot", ["openai", "relay", "anthropic"])
-@pytest.mark.parametrize("env_key", ["sk-env-test", "", "PUBLIC_EXAMPLE_API_KEY"])
+@pytest.mark.parametrize("env_key", ["sk-env-test", "", "sk-public-replace_me"])
 def test_real_url_change_requires_a_new_key_even_when_env_key_is_missing(sandbox, slot, env_key):
     client, env_path, config_path = sandbox
     seed(env_path, config_path, slot, env_key=env_key)
@@ -140,7 +140,7 @@ def test_openai_local_gateway_keeps_its_own_authentication_key(sandbox):
 
 
 @pytest.mark.parametrize("slot", ["openai", "anthropic", "relay"])
-@pytest.mark.parametrize("env_key", ["", "PUBLIC_EXAMPLE_API_KEY"])
+@pytest.mark.parametrize("env_key", ["", "sk-public-replace_me"])
 @pytest.mark.parametrize("env_base", ["", "https://unused-env.example/v1"])
 def test_mirror_only_credentials_keep_their_url_on_model_only_save(sandbox, slot, env_key, env_base):
     client, env_path, config_path = sandbox
@@ -154,7 +154,7 @@ def test_mirror_only_credentials_keep_their_url_on_model_only_save(sandbox, slot
     assert mirror["apiKey"] == "sk-mirror-test"
 
 
-@pytest.mark.parametrize("anthropic_key", ["", "PUBLIC_EXAMPLE_API_KEY", "sk-official-test"])
+@pytest.mark.parametrize("anthropic_key", ["", "sk-public-replace_me", "sk-official-test"])
 @pytest.mark.parametrize("reverse_rows", [False, True])
 def test_full_panel_save_uses_complete_relay_pair_like_setup(sandbox, anthropic_key, reverse_rows):
     client, env_path, config_path = sandbox
@@ -176,7 +176,7 @@ def test_full_panel_save_uses_complete_relay_pair_like_setup(sandbox, anthropic_
     assert "EASEL_LLM_BASE_URL=https://new-relay.example/v1" in env_path.read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("relay_key", ["", "PUBLIC_EXAMPLE_API_KEY", "sk-incomplete-relay-test"])
+@pytest.mark.parametrize("relay_key", ["", "sk-public-replace_me", "sk-incomplete-relay-test"])
 def test_full_panel_save_does_not_prefer_incomplete_relay(sandbox, relay_key):
     client, env_path, config_path = sandbox
     seed(env_path, config_path, "anthropic", base="")
@@ -194,10 +194,10 @@ def test_full_panel_save_does_not_prefer_incomplete_relay(sandbox, relay_key):
 
 def test_full_panel_without_authoritative_credentials_keeps_mirror_pair(sandbox):
     client, env_path, config_path = sandbox
-    seed(env_path, config_path, "anthropic", env_key="PUBLIC_EXAMPLE_API_KEY",
+    seed(env_path, config_path, "anthropic", env_key="sk-public-replace_me",
          base="https://unused-official.example")
     with env_path.open("a", encoding="utf-8") as output:
-        output.write("EASEL_LLM_API_KEY=PUBLIC_EXAMPLE_API_KEY\n"
+        output.write("EASEL_LLM_API_KEY=sk-public-replace_me\n"
                      "EASEL_LLM_BASE_URL=https://unused-relay.example/v1\n")
     response = client.post("/api/settings/models/save", json={"rows": [
         {"slot": "anthropic", "model": "new-model"},

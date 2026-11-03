@@ -87,7 +87,7 @@ def test_placeholder_key_reports_missing(tmp_path, monkeypatch):
     等于把用户送进一个无法自解释的死胡同。
     """
     envf = tmp_path / ".env"
-    envf.write_text("ANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY\n"
+    envf.write_text("ANTHROPIC_API_KEY=sk-public-replace_me\n"
                     "CLAUDE_MODEL=anthropic/claude-sonnet-4-6\n", encoding="utf-8")
     monkeypatch.setattr(app, "ENV_FILE", envf)
     rows = app._model_channels()["channels"]["chat"]["rows"]
@@ -122,7 +122,7 @@ def test_bootstrap_reports_unconfigured_for_placeholder(tmp_path, monkeypatch):
     from fastapi.testclient import TestClient
 
     monkeypatch.setattr(app, "ENV_FILE", tmp_path / ".env")
-    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY\n", encoding="utf-8")
+    (tmp_path / ".env").write_text("ANTHROPIC_API_KEY=sk-public-replace_me\n", encoding="utf-8")
     monkeypatch.setattr("easel.commands.doctor._env_key_valid", lambda: False)
     monkeypatch.setattr("easel.commands.doctor._primary_model_routable",
                         lambda: (False, "provider 未配置认证"))

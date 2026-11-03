@@ -204,7 +204,7 @@ def test_check_mode_never_leaks_secrets(tmp_path: Path) -> None:
 @needs_bash
 def test_check_mode_without_key_warns_and_still_exits_zero(tmp_path: Path) -> None:
     """没有可用 Key 时要降级提示并引导去浏览器，而不是中断。"""
-    proc, actions = _run_check(tmp_path, "ANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY\n")
+    proc, actions = _run_check(tmp_path, "ANTHROPIC_API_KEY=sk-public-replace_me\n")
     assert proc.returncode == 0, f"无 key 不该让安装失败：\n{proc.stdout[-1200:]}"
     assert "模型配置" in proc.stdout or "浏览器" in proc.stdout, \
         "应当提示去浏览器配置模型"
@@ -215,7 +215,7 @@ def test_check_mode_without_key_warns_and_still_exits_zero(tmp_path: Path) -> No
 
 @needs_bash
 def test_skip_installer_checks_web_without_touching_openclaw_or_credentials(tmp_path):
-    env_lines = "EASEL_CHAT_TRANSPORT=http\nANTHROPIC_API_KEY=PUBLIC_EXAMPLE_API_KEY\n"
+    env_lines = "EASEL_CHAT_TRANSPORT=http\nANTHROPIC_API_KEY=sk-public-replace_me\n"
     proc, actions = _run_check(tmp_path, env_lines, ["--skip-openclaw"], forbid_openclaw=True)
     assert proc.returncode == 0, proc.stderr[-1000:]
     assert not (tmp_path / "openclaw-called").exists()
