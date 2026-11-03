@@ -1,0 +1,53 @@
+/* 寻欢品牌层：独立于功能样式，便于回退与维护。 */
+:root {
+  --bg: #fafafa;
+  --bg-elev: #ffffff;
+  --surface: #ffffff;
+  --surface-2: #f7f7f8;
+  --surface-hover: #f2f3f5;
+  --text: #242424;
+  --text-secondary: #68686e;
+  --text-tertiary: #85858c;
+  --border: #ededf0;
+  --border-strong: #dcdce1;
+  --accent-start: #ff2442;
+  --accent-end: #d91d39;
+  --accent-soft: #fff0f2;
+  --accent-gradient: linear-gradient(#ff2442, #ff2442);
+  --accent-gradient-soft: linear-gradient(#fff3f5, #fff3f5);
+  --glow: 0 0 0 3px rgba(255, 36, 66, .09);
+}
+.sidebar { background: #fff; }
+.sidebar-logo { align-items: center; gap: 9px; }
+.sidebar-logo h1 {
+  min-width: 0; flex: 1; font-family: 'Microsoft YaHei', 'Noto Sans SC', sans-serif;
+  font-size: 15px; line-height: 1.6; font-style: normal; font-weight: 750;
+  letter-spacing: 0; max-width: 156px; text-wrap: balance;
+}
+.sidebar-logo-icon { width: 32px; height: 32px; flex-shrink: 0; }
+.sidebar-logo .theme-toggle { width: 28px; height: 28px; padding: 5px; }
+.main-content, .page-host, .chat-page { background: var(--bg); }
+.nav-item.active { color: var(--accent-end); font-weight: 650; }
+.nav-item.active::before { background: var(--accent-start); }
+.session-item.active { color: var(--accent-end); }
+.chat-hero-brand { color: var(--text); font-family: 'Microsoft YaHei', sans-serif; font-style: normal; letter-spacing: 0; font-size: clamp(18px, 2vw, 24px); }
+.chat-hero-brand img { width: 38px; height: 38px; }
+.dash-quick-btn:hover, .card-hover:hover { border-color: #ffc4ce; }
+.btn-primary:hover:not(:disabled) { filter: brightness(.96); box-shadow: 0 4px 12px rgba(255,36,66,.16); }
+.brush-chip-pipe, .brush-item-pipe { background: var(--accent-soft); border-color: #ffd1d9; }
+.message-bubble.user { background: var(--accent-soft); border-color: #ffe0e6; }
+:root[data-theme='dark'] {
+  --accent-start: #ff5870; --accent-end: #ff8295;
+  --accent-soft: #38232a;
+  --accent-gradient: linear-gradient(#e92a48, #e92a48);
+  --accent-gradient-soft: linear-gradient(#38232a, #38232a);
+  --glow: 0 0 0 3px rgba(255,88,112,.12);
+}
+:root[data-theme='dark'] .sidebar { background: #1b1b20; }
+:root[data-theme='dark'] :is(.main-content, .page-host, .chat-page) { background: var(--bg); }
+:root[data-theme='dark'] :is(.btn-primary, .send-btn, .brush-tab.on) { color: #fff; }
+@media (max-width: 1050px) {
+  .dash-grid { grid-template-columns: minmax(0, 1fr); }
+  .dash-card { min-width: 0; }
+  .dash-card-wide { grid-column: span 1; }
+}
