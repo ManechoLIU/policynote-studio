@@ -12,7 +12,13 @@ def _discover_root() -> Path:
     configured = os.environ.get("EASEL_ROOT", "").strip()
     if configured:
         return Path(configured).expanduser().resolve()
-    for parent in (Path(__file__).resolve().parent, *Path(__file__).resolve().parents):
+    parents = Path(__file__).resolve().parents
+    # A fresh checkout has no generated outputs yet. Identify the source root
+    # independently of runtime data, while retaining OpenClaw symlink support.
+    for parent in parents:
+        if (parent / "pyproject.toml").is_file() and (parent / "easel" / "cli.py").is_file():
+            return parent
+    for parent in parents:
         outputs = parent / "outputs"
         if outputs.exists():
             # The OpenClaw workspace exposes outputs as a symlink to the project.

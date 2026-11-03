@@ -101,13 +101,13 @@ jobs:
       - name: PowerShell parse check
         shell: pwsh
         run: |
-          $files = git ls-files '*.ps1' | Where-Object { $_ -notmatch 'vendor/' }
+          $files = git -c core.quotepath=false ls-files '*.ps1' | Where-Object { $_ -notmatch 'vendor/' }
           if (-not $files) { throw '没找到要检查的 .ps1' }
           $bad = $false
           foreach ($f in $files) {
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile(
-              (Resolve-Path $f), [ref]$null, [ref]$errors) | Out-Null
+              (Resolve-Path -LiteralPath $f), [ref]$null, [ref]$errors) | Out-Null
             if ($errors) { Write-Host "== $f"; $errors | Format-List; $bad = $true }
           }
           if ($bad) { throw 'PowerShell 解析失败（注意 setup.ps1 必须保持 UTF-8 with BOM）' }
@@ -116,7 +116,7 @@ jobs:
         shell: pwsh
         run: |
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser -ErrorAction Stop
-          $files = git ls-files '*.ps1' | Where-Object { $_ -notmatch 'vendor/' }
+          $files = git -c core.quotepath=false ls-files '*.ps1' | Where-Object { $_ -notmatch 'vendor/' }
           if (-not $files) { throw '没找到要检查的 .ps1' }
           # -Path 只收单个字符串，传数组会抛错却仍让这一步「0 findings」通过 —— 必须逐个扫。
           $r = @($files | ForEach-Object {

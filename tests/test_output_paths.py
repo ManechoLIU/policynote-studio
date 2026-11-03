@@ -5,6 +5,27 @@ import pytest
 from skills.shared.scripts import output_paths
 
 
+def test_discover_root_in_fresh_checkout(tmp_path, monkeypatch):
+    script = tmp_path / "skills" / "shared" / "scripts" / "output_paths.py"
+    script.parent.mkdir(parents=True)
+    script.touch()
+    (tmp_path / "pyproject.toml").touch()
+    (tmp_path / "easel").mkdir()
+    (tmp_path / "easel" / "cli.py").touch()
+    monkeypatch.delenv("EASEL_ROOT", raising=False)
+    monkeypatch.setattr(output_paths, "__file__", str(script))
+
+    assert output_paths._discover_root() == tmp_path.resolve()
+    assert not (tmp_path / "outputs").exists()
+
+
+def test_discover_root_honors_explicit_configuration(tmp_path, monkeypatch):
+    configured = tmp_path / "configured"
+    monkeypatch.setenv("EASEL_ROOT", str(configured))
+
+    assert output_paths._discover_root() == configured.resolve()
+
+
 def test_content_output_requires_project_subdirectory(tmp_path, monkeypatch):
     monkeypatch.setattr(output_paths, "PROJECT_ROOT", tmp_path)
     monkeypatch.setattr(output_paths, "OUTPUTS_DIR", tmp_path / "outputs")
