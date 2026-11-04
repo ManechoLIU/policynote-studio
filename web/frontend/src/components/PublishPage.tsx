@@ -21,7 +21,7 @@ const PLATFORM_ART: Record<string, readonly [number, number, number, number]> = 
 const DISPLAY_ORDER = ['xiaohongshu','douyin','wechat-oa','weixin-channels','bilibili','zhihu','kuaishou'];
 
 const PLATFORMS: { key: string; label: string; titleLimit?: number; bodyLimit: number; hint: string }[] = [
-  { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, hint: '标题≤20，正文≤1000，重情绪+话题标签；仅存小红书平台草稿，未公开发布' },
+  { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, hint: '标题≤20，正文≤1000，重情绪+话题标签；仅存工作台专用浏览器的本地草稿，未公开发布；手机 App 不自动显示' },
   { key: 'douyin', label: '抖音', titleLimit: 55, bodyLimit: 55, hint: '文案≤55，前几字是钩子' },
   { key: 'kuaishou', label: '快手', titleLimit: 30, bodyLimit: 1000, hint: '视频或图片(图文)，标题≤30，需附媒体' },
   { key: 'weixin-channels', label: '视频号', bodyLimit: 1000, hint: '需附视频，短描述+话题标签，微信扫码登录' },
@@ -207,7 +207,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
     const okToSend = window.confirm(
       `发布前预检已执行，结果已显示在页面中。人设评分只做提醒，不会阻止提交。\n\n` +
       (publicTargets.length ? `公开发布：${publicTargets.map((target) => target.label).join('、')}。\n` : '') +
-      (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。\n` : '') +
+      (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。小红书草稿仅存工作台专用浏览器本地，手机 App 不自动显示。\n` : '') +
       `确定继续？`);
     if (!okToSend) return;
 
@@ -225,16 +225,16 @@ export default function PublishPage({ persona }: PublishPageProps) {
         setPub((r) => ({ ...r, [t.key]: { status: 'fail', msg: `${t.label}只能发视频，请从内容库选一个视频` } }));
         continue;
       }
-      setPub((r) => ({ ...r, [t.key]: { status: 'publishing', msg: DRAFT_PLATFORMS.has(t.key) ? '保存平台草稿中…可能需 1-2 分钟' : '发布中…可能需 1-2 分钟' } }));
+      setPub((r) => ({ ...r, [t.key]: { status: 'publishing', msg: t.key === 'xiaohongshu' ? '保存浏览器本地草稿中…可能需 1-2 分钟' : DRAFT_PLATFORMS.has(t.key) ? '保存平台草稿中…可能需 1-2 分钟' : '发布中…可能需 1-2 分钟' } }));
       try {
         const res = await publishNow(t.key, { title, body: effective(t.key), media: selectedMedia, tags });
         if (t.key === 'xiaohongshu') {
           const saved = res.ok === true && res.outcome === 'draft_saved' && res.published === false && !res.async;
           const failureMessage = res.ok === false
-            ? `${typeof res.message === 'string' && res.message.trim() ? res.message : '保存小红书草稿失败'}。请先检查创作者后台草稿，勿重复提交`
-            : '未确认保存至小红书草稿，请检查平台草稿箱';
+            ? `${typeof res.message === 'string' && res.message.trim() ? res.message : '保存小红书草稿失败'}。请先检查创作者后台草稿，勿重复提交（请使用工作台专用浏览器查看）`
+            : '未确认保存至小红书草稿，请检查工作台专用浏览器内的小红书草稿箱';
           setPub((r) => ({ ...r, [t.key]: saved
-            ? { status: 'ok', msg: '已保存至小红书草稿，未公开发布' }
+            ? { status: 'ok', msg: '已保存至小红书草稿，未公开发布（仅工作台专用浏览器本地，手机 App 不自动显示）' }
             : { status: 'fail', msg: failureMessage } }));
         } else if (t.key === 'wechat-oa') {
           setPub((r) => ({ ...r, [t.key]: res.ok && !res.async
@@ -332,7 +332,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
     <div className="publish-page">
       <div className="publish-editor">
         <h1 className="page-title"><IconPublish size={21} /> 发布中心</h1>
-        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 提交。小红书与公众号仅存平台草稿，其他平台公开发布。</p>
+        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 提交。小红书仅存工作台专用浏览器本地草稿，公众号存平台草稿，其他平台公开发布。</p>
 
         <label className="field-label">标题</label>
         <input className="field" value={title} placeholder="标题（部分平台需要）"
@@ -453,7 +453,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
             <IconCalendar size={14} /> 存本地草稿并排期
           </button>
           <button className="btn btn-sm btn-primary" disabled={empty || publishing || checking || !canPublish}
-            title={canPublish ? hasDraftTarget ? '小红书与公众号仅存平台草稿，其他所选平台公开发布' : '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}
+            title={canPublish ? hasDraftTarget ? '小红书存专用浏览器本地草稿，公众号存平台草稿，其他所选平台公开发布' : '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}
             onClick={publishAll}>
             <IconPublish size={14} /> {publishing ? hasDraftTarget ? '提交中…' : '发布中…' : submitLabel}
           </button>

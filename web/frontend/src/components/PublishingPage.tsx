@@ -29,7 +29,7 @@ export default function PublishingPage({ persona }: { persona: string }) {
   const automaticAllowed = policy.mode === 'automated' && policy.automaticSubmission;
   const manual = mode === 'manual' || !automaticAllowed;
   return <div className="publishing-workspace">
-    <header className="mingya-publishing-heading"><h1><span aria-hidden="true" />发布中心</h1><p>编辑内容，一键适配并提交至多平台；小红书与公众号仅存平台草稿。</p></header>
+    <header className="mingya-publishing-heading"><h1><span aria-hidden="true" />发布中心</h1><p>编辑内容，一键适配并提交至多平台；小红书仅存工作台专用浏览器本地草稿，公众号存平台草稿。</p></header>
     <div className="publishing-mode-bar">
       <div className="subnav-tabs" role="group" aria-label="发布方式">
         <button type="button" className={`subnav-tab ${!manual ? 'active' : ''}`}
@@ -44,7 +44,7 @@ export default function PublishingPage({ persona }: { persona: string }) {
       <span className="pv-hint">{!automaticAllowed
         ? '管理员已禁用自动发布，当前仅提供人工审核路径。'
         : manual ? '审核后复制或导出，前往官方页面亲自提交；切换不更改全局自动发布权限。'
-          : '保留账号检查、预检与确认；小红书/公众号仅存平台草稿，其他平台公开发布。'}</span>
+          : '保留账号检查、预检与确认；小红书仅存工作台专用浏览器本地草稿，公众号存平台草稿，其他平台公开发布。'}</span>
     </div>
     <div className="publishing-mode-content">
       {manual ? <ManualPublishPage persona={persona} /> : <AutomatedPublishPage persona={persona} />}
