@@ -5,7 +5,9 @@ import BrushEntry from './BrushEntry';
 import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
 import type { UploadedFile } from '../lib/api';
-import { IconArrowUp, IconStop, IconPlus, IconFile } from './icons';
+import { IconStop, IconFile, IconSend, IconProfile, IconChevron, IconCompass, IconEdit } from './icons';
+import { BannerBackground, ReferenceArtwork, SectionMark } from './MingyaPrimitives';
+import '../styles/mingya-chat.css';
 
 interface ChatPageProps {
   apiDirect: boolean;
@@ -22,7 +24,7 @@ interface ChatPageProps {
   onQuestionAnswered?: (questionId: string) => void;   // 某道问答题提交成功（App 记录答过，重放不再出现）
 }
 
-// 空态推荐（贴合 Easel 社媒创作场景）
+// 保留既有快捷任务与发送内容，仅调整品牌视觉。
 const SUGGESTIONS = [
   { icon: '🔥', title: '蹭个热点', prompt: '看看现在微博和抖音有什么热搜，挑几个适合我做二创的选题' },
   { icon: '✍️', title: '写小红书文案', prompt: '帮我写一条小红书种草文案，主题先问我' },
@@ -30,11 +32,11 @@ const SUGGESTIONS = [
   { icon: '🎬', title: '口播脚本', prompt: '帮我写一条 60 秒的口播短视频脚本，主题先问我' },
 ];
 
-function greeting(): string {
-  const h = new Date().getHours();
-  const g = h < 6 ? '夜深了' : h < 12 ? '上午好' : h < 14 ? '中午好' : h < 18 ? '下午好' : '晚上好';
-  return `${g}，想创作点什么？`;
-}
+const QUICK_TASKS = [
+  { title: '帮我选题', description: '从真实问题中找到合适的选题', prompt: '帮我策划一条小红书选题，主题先问我', Icon: IconCompass },
+  { title: '帮我写稿', description: '围绕主题生成清晰的笔记文案', prompt: '帮我写一条小红书种草文案，主题先问我', Icon: IconFile },
+  { title: '帮我改稿', description: '优化表达、结构与可读性', prompt: '帮我修改一篇小红书文案，先问我要原稿', Icon: IconEdit },
+];
 
 export default function ChatPage({ apiDirect, session, stream, onSend, onStop, onResend, onQuestionAnswered }: ChatPageProps) {
   const [input, setInput] = useState('');
@@ -141,12 +143,10 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
         </div>
       )}
       <div className="composer-top">
-        {apiDirect ? <span className="composer-hint">API 直连 · 文字与附件分析</span>
-          : <BrushEntry onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
         <textarea
           ref={textareaRef}
           className="chat-input"
-          placeholder={dragOver ? '松手上传素材…' : hero ? '把你的想法告诉我，选题 / 文案 / 卡片 / 视频 / 发布都行…（可拖入图片/文档当素材）' : '发消息…（Enter 发送，Shift+Enter 换行，可拖入/粘贴素材）'}
+          placeholder={dragOver ? '松手上传素材…' : hero ? '写下主题，或添加你的创作素材…' : '发消息…（Enter 发送，Shift+Enter 换行，可拖入/粘贴素材）'}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onCompositionStart={() => { isComposingRef.current = true; }}
@@ -163,13 +163,14 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
       <div className="composer-bar">
         <button className="composer-attach-btn" onClick={() => fileInputRef.current?.click()}
           disabled={isStreaming || uploading} title={`添加素材（图片/文档）；超过 ${maxMb}MB 的大文件将自动存为本地素材（不走上传）`}>
-          <IconPlus size={15} /> {uploading ? '上传中…' : '素材'}
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m8 12 6.5-6.5a3.2 3.2 0 0 1 4.5 4.5L10 19a5 5 0 0 1-7-7l9-9" /><path d="m6 14 8-8" /></svg> {uploading ? '上传中…' : '上传附件'}
         </button>
-        <span className="composer-hint">{isStreaming ? '生成中…' : 'Enter 发送 · Shift+Enter 换行'}</span>
+        {!apiDirect && <BrushEntry onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
+        <span className="composer-hint">{isStreaming ? '生成中…' : '按 Enter 发送，Shift + Enter 换行'}</span>
         {isStreaming ? (
           <button className="send-btn" onClick={onStop} title="停止生成"><IconStop size={15} /></button>
         ) : (
-          <button className="send-btn" onClick={handleSend} disabled={(!input.trim() && !attachments.length) || uploading} title="发送"><IconArrowUp size={17} /></button>
+          <button className="send-btn" onClick={handleSend} disabled={(!input.trim() && !attachments.length) || uploading} title="发送"><IconSend size={28} /></button>
         )}
       </div>
     </div>
@@ -178,28 +179,37 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   // ---- 空态：居中欢迎页 ----
   if (isEmpty) {
     return (
-      <div className="chat-page">
+      <div className="chat-page strict-chat-page strict-chat-empty">
         <div className="chat-hero">
+          <BannerBackground page="chat" />
+          <div className="chat-workspace-label"><SectionMark>内部创作工作台</SectionMark></div>
           <div className="chat-hero-brand">
-            <img src="./static/xunhuan-mark.svg" alt="" />
-            <span>寻欢小红书获客系统</span>
+            <ReferenceArtwork page="chat" crop={[323, 155, 37, 35]} className="chat-identity-logo" />
+            <strong>明亚</strong><span>· 小红书工作台</span>
+            <span className="chat-brand-divider" aria-hidden="true" />
+            <span className="chat-current-persona"><IconProfile size={24} /><span title={session.persona || '未选择 IP'}>{session.persona || '未选择 IP'}</span><span className="chat-persona-chevron" aria-hidden="true">⌄</span></span>
           </div>
-          <h1 className="chat-hero-title">{greeting()}</h1>
-          <p className="chat-hero-sub">{apiDirect ? 'API 直连：写文案、策划选题、分析附件。本机工具和自动发布未启用。'
-            : '从选题到发布，一站式帮你把想法做成能发的内容。'}</p>
+          <h1 className="chat-hero-title">今天，想把哪个<span className="chat-title-question">保险问题讲清楚？<span className="chat-title-underline" aria-hidden="true" /></span></h1>
+          <p className="chat-hero-sub">从真实问题出发，让每一次表达都更清楚。</p>
           {inputBox(true)}
           <div className="suggestions">
-            {SUGGESTIONS.filter((s) => !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
-              <button key={s.title} className="card card-hover suggestion-card"
-                onClick={() => { if (!isStreaming) onSend(s.prompt); }}>
-                <span className="suggestion-icon">{s.icon}</span>
-                <span className="suggestion-body">
-                  <span className="suggestion-title">{s.title}</span>
-                  <span className="suggestion-text">{s.prompt}</span>
-                </span>
+            {QUICK_TASKS.map((s) => (
+              <button key={s.title} className="strict-chat-task" onClick={() => { if (!isStreaming) onSend(s.prompt); }}>
+                <span className="suggestion-icon"><s.Icon size={42} /></span>
+                <span className="suggestion-body"><span className="suggestion-title">{s.title}</span><span className="suggestion-text">{s.description}</span></span>
+                <IconChevron size={22} />
               </button>
             ))}
           </div>
+          <details className="chat-more-tasks">
+            <summary>更多原有任务</summary>
+            <div className="chat-original-tasks">
+              {SUGGESTIONS.filter((s) => !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
+                <button key={s.title} title={s.prompt} onClick={() => { if (!isStreaming) onSend(s.prompt); }}><span>{s.icon}</span>{s.title}</button>
+              ))}
+            </div>
+          </details>
+          <div className="chat-mode-status"><span className="chat-status-rule" /><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m10 13 4-4M8 16l-1 1a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m0 12a4 4 0 0 0 6 0l5-5a4 4 0 0 0-6-6l-1 1" /></svg><span>{apiDirect ? 'API 直连 · 文字与附件分析' : '本机 Agent · 创作工具模式'}</span><span className="chat-status-rule" /></div>
         </div>
       </div>
     );
@@ -210,7 +220,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   if (isStreaming) displayMessages.push({ role: 'assistant', content: stream!.content || '' });
 
   return (
-    <div className="chat-page">
+    <div className="chat-page strict-chat-page">
       <div className="chat-messages">
         <div className="chat-thread">
           {displayMessages.map((msg, i) => {

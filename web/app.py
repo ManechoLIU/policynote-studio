@@ -488,7 +488,7 @@ if _proxy_origin:
 
 
 def _loopback_peer(request: Request) -> bool:
-    """对端是否来自回环地址。只有「没有 Origin 可判」时才用作判据。"""
+    """对端是否来自回环地址；用于无Origin或实际监听端口的同源请求。"""
     client = request.client
     if client is None:
         return False
@@ -499,16 +499,28 @@ def _loopback_peer(request: Request) -> bool:
         return False
 
 
+def _same_loopback_origin(request: Request, origin: str) -> bool:
+    """允许回环页面在实际监听端口发同源请求，不信任其他本地端口。"""
+    return (
+        _loopback_peer(request)
+        and request.url.hostname in ('127.0.0.1', 'localhost')
+        and origin == f'{request.url.scheme}://{request.url.netloc}'
+    )
+
+
 app.add_middleware(CORSMiddleware, allow_origins=_LOCAL_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=['localhost', '127.0.0.1'] + _EXTRA_HOSTS)
+_XHS_ACCOUNT_READ_PATHS = {'/api/xhs/notes/search', '/api/xhs/notes/detail'}
 
 
 @app.middleware('http')
 async def local_write_guard(request: Request, call_next):
     """拦住「别的网站让浏览器替我改本机状态」的写请求，同时不误伤本机调用。
 
+    两个小红书账号读取GET也复用此边界，且禁止跨站子资源触发和浏览器缓存。
+
     两条判据，按请求实际形态二选一：
-    ① 带 Origin（浏览器跨站发起）：Origin 必须在 _LOCAL_ORIGINS 里，否则 403。
+    ① 带 Origin：必须在 _LOCAL_ORIGINS 里，或为回环客户端访问的同源工作台。
     ② 不带 Origin（curl / 本机脚本 / 测试客户端）：要求对端来自回环地址。
 
     局限（重要）：这套防护假定 Origin/Host 头不可伪造——对浏览器成立，对裸
@@ -532,11 +544,18 @@ async def local_write_guard(request: Request, call_next):
         response = await call_next(request)
         response.headers.update(headers)
         return response
-    if request.method not in ('GET', 'HEAD', 'OPTIONS'):
-        allowed = origin in _LOCAL_ORIGINS if origin else _loopback_peer(request)
+    account_read = request.method in ('GET', 'HEAD') and request.url.path in _XHS_ACCOUNT_READ_PATHS
+    fetch_site = request.headers.get('sec-fetch-site', '').lower()
+    if account_read and (fetch_site == 'cross-site' or (not origin and fetch_site == 'same-site')):
+        return JSONResponse({'detail': '仅允许从本机工作台操作。'}, status_code=403)
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') or account_read:
+        allowed = (origin in _LOCAL_ORIGINS or _same_loopback_origin(request, origin)) if origin else _loopback_peer(request)
         if not allowed:
             return JSONResponse({'detail': '仅允许从本机工作台操作。'}, status_code=403)
-    return await call_next(request)
+    response = await call_next(request)
+    if account_read:
+        response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 def list_personas() -> list[dict]:
@@ -972,7 +991,10 @@ def _publishing_message(message: str) -> str:
                 "不要调用发布脚本、发布接口、浏览器代填或代点发布。"
                 "引导用户在发布中心审核、复制或导出，再在官方页面亲自提交。"
                 "导出、复制、打开网页和排期均不代表已发布。\n\n" + message)
-    return message
+    return ("【小红书仅保存平台草稿】小红书自动操作只能存草稿，由用户在官方页面手动公开发布。"
+            "不得自动点发布、改用其他脚本/接口绕过，也不得把草稿写成已发布记录。"
+            "必须获得明确草稿保存回执才可声称已保存；结果未知时先检查官方草稿，勿盲目重试。"
+            "其他平台按现有发布策略执行。\n\n" + message)
 
 
 def run_agent_sync(msg: str, timeout: int = TIMEOUT_DIRECT, session_id: str | None = None) -> str:
@@ -4530,6 +4552,91 @@ async def api_account_whoami(platform: str, force: bool = False):
     return await asyncio.shield(task)
 
 
+def _xhs_safe_auth_failure(payload=None, stage='whoami_result') -> dict:
+    payload = payload if isinstance(payload, dict) else {}
+    codes = {'XHS_PROFILE_BUSY', 'XHS_RUNTIME_UNAVAILABLE', 'XHS_WHOAMI_UNCONFIRMED',
+             'XHS_AUTH_REQUIRED', 'XHS_AUTH_UNKNOWN', 'XHS_WHOAMI_TIMEOUT'}
+    stages = {'whoami_import', 'whoami_profile_lock', 'whoami_launch', 'whoami_account',
+              'whoami_page', 'whoami_close', 'whoami_result', 'whoami_runner',
+              'whoami_creator_page', 'whoami_web_page', 'publish_auth', 'publish_navigation'}
+    types = {'Error', 'TimeoutError', 'TimeoutExpired', 'RuntimeError', 'ValueError', 'TypeError',
+             'OSError', 'ImportError', 'ModuleNotFoundError', 'PermissionError', 'ConnectionError', 'TargetClosedError'}
+    code = payload.get('error')
+    reported_stage, error_type = payload.get('stage'), payload.get('error_type')
+    return {'errorCode': code if isinstance(code, str) and code in codes else 'XHS_WHOAMI_UNCONFIRMED',
+            'stage': reported_stage if isinstance(reported_stage, str) and reported_stage in stages else stage,
+            'error_type': error_type if isinstance(error_type, str) and error_type in types else 'UnknownError'}
+
+
+def _xhs_whoami_failure_http(payload=None, *, stage='whoami_result', status=502):
+    safe = _xhs_safe_auth_failure(payload, stage)
+    print('XHS_AUTH_DIAGNOSTIC ' + json.dumps(safe), file=sys.stderr)
+    message = ('小红书登录目录正在使用，请稍后校验；原登录状态和账号资料保持不变'
+               if safe['errorCode'] == 'XHS_PROFILE_BUSY' else
+               '未能确认当前账号身份，请稍后重试校验；原登录状态和账号资料保持不变')
+    return HTTPException(status, message, headers={
+        'X-XHS-Auth-Code': safe['errorCode'], 'X-XHS-Auth-Stage': safe['stage'],
+        'X-XHS-Auth-Error-Type': safe['error_type']})
+
+
+def _xhs_safe_runner_diagnostics(stderr):
+    """Keep structured runner evidence, never raw exceptions or request content."""
+    labels = {'暂存离开', '存草稿', '保存草稿', '发布', '确认', '确定', '确认发布', '立即发布', '取消',
+              '返回', '离开', '保存并离开', '确认离开', '继续编辑', '不保存', '不保存离开', '放弃',
+              '直接离开', '是否保存草稿', '草稿保存失败', '保存草稿失败', '草稿保存中', '正在保存草稿',
+              '草稿保存成功', '保存草稿成功', '草稿已保存', '已保存草稿', '已存为草稿',
+              '已保存至草稿箱', '草稿保存完成', '<other>'}
+    stages = {'closed_shadow_scan', 'closed_shadow_clicked', 'closed_shadow_cleanup_failed',
+              'closed_shadow_result_unknown', 'closed_shadow_blocked', 'receipt_baseline_unavailable',
+              'receipt_unavailable', 'receipt_timeout', 'draft_confirmation_sent',
+              'draft_confirmation_result_unknown', 'draft_action_sent', 'publish_auth', 'publish_navigation',
+              'whoami_creator_page', 'whoami_web_page'}
+    for line in (stderr or '').splitlines():
+        prefix, _, raw = line.partition(' ')
+        if prefix not in ('XHS_AUTH_DIAGNOSTIC', 'XHS_DRAFT_DIAGNOSTIC'):
+            continue
+        try:
+            data = json.loads(raw)
+            if not isinstance(data, dict) or data.get('stage') not in stages:
+                continue
+            safe = {'stage': data['stage']}
+            if 'error_type' in data:
+                safe['error_type'] = _xhs_safe_auth_failure(data)['error_type']
+            for key in ('login_ok', 'login_wall', 'action_sent', 'confirmation_sent', 'notice_confirmed'):
+                if key in data and (data[key] is None or type(data[key]) is bool):
+                    safe[key] = data[key]
+            for key in ('state', 'document_state'):
+                if data.get(key) in ('auth_required', 'auth_unknown', 'same', 'new', 'unknown'):
+                    safe[key] = data[key]
+            for key in ('candidates', 'confirmation_dialog_count'):
+                if type(data.get(key)) is int and 0 <= data[key] <= 50000:
+                    safe[key] = data[key]
+            if data.get('label') in labels:
+                safe['label'] = data['label']
+            for key in ('buttons', 'dialogs', 'notices', 'confirmation_buttons'):
+                if isinstance(data.get(key), list):
+                    safe[key] = [label for label in data[key][:20] if isinstance(label, str) and label.rstrip('！!。') in labels]
+            if isinstance(data.get('hosts'), list):
+                safe['hosts'] = [{'closed': host.get('closed') is True, 'buttons': [
+                    {'label': button.get('label') if button.get('label') in labels else '<other>',
+                     'semantic': button.get('semantic') if button.get('semantic') in ('BUTTON', 'role=button') else '<other>'}
+                    for button in host.get('buttons', [])[:20] if isinstance(button, dict)]}
+                    for host in data['hosts'][:10] if isinstance(host, dict) and isinstance(host.get('buttons', []), list)]
+            if isinstance(data.get('url'), str):
+                url = urllib.parse.urlparse(data['url'])
+                safe['url'] = ('https://' + url.hostname + url.path if url.scheme == 'https'
+                               and url.hostname in ('creator.xiaohongshu.com', 'www.xiaohongshu.com')
+                               and url.port in (None, 443) else '<non_official>')
+            if isinstance(data.get('screenshot'), str):
+                path = Path(data['screenshot']).resolve()
+                directory = (OUTPUTS_DIR / '_runtime' / 'draft-r1').resolve()
+                if path.parent == directory and re.fullmatch(r'(auth-refusal|draft-timeout)-[0-9]+\.png', path.name):
+                    safe['screenshot'] = str(path)
+            yield prefix, safe
+        except (TypeError, ValueError, OSError):
+            continue
+
+
 async def _check_account_whoami(platform: str, force: bool = False):
     """真校验登录态 + 读昵称/头像（起 headless 浏览器，数秒）。前端开页后台调用以自愈假阳性。
     带 TTL 进程内缓存（避免账号页+工作台重复起浏览器）；确认已登录则回写标记，令快速路径自愈。"""
@@ -4592,9 +4699,17 @@ async def _check_account_whoami(platform: str, force: bool = False):
                                        capture_output=True, text=True, encoding='utf-8',
                                        timeout=35 if backend == 'xhs' else 40 if backend in ('douyin', 'wechat-oa') else 60)
     except subprocess.TimeoutExpired:
+        if backend == 'xhs':
+            raise _xhs_whoami_failure_http({'error': 'XHS_WHOAMI_TIMEOUT', 'error_type': 'TimeoutExpired'},
+                                           stage='whoami_runner', status=504) from None
         raise HTTPException(504, '校验超时（浏览器起不来或网络慢）')
+    except Exception as error:
+        if backend == 'xhs':
+            raise _xhs_whoami_failure_http({'error_type': type(error).__name__}, stage='whoami_runner') from None
+        raise
     data = {'loggedIn': False, 'name': '', 'avatar': ''}
     confident = False
+    failure_payload = None
     for line in reversed((proc.stdout or '').strip().splitlines()):
         line = line.strip()
         if line.startswith('{'):
@@ -4603,6 +4718,7 @@ async def _check_account_whoami(platform: str, force: bool = False):
                 data = {'loggedIn': bool(d.get('loggedIn')), 'name': d.get('name') or '', 'avatar': d.get('avatar') or ''}
                 # 有 error 字段 = 校验本身失败（浏览器起不来/网络抖动/崩溃），不是可信的「未登录」结论
                 confident = proc.returncode == 0 and isinstance(d.get('loggedIn'), bool) and not d.get('error')
+                failure_payload = d
                 break
             except Exception:
                 continue
@@ -4611,6 +4727,10 @@ async def _check_account_whoami(platform: str, force: bool = False):
             or (current_process is not None and current_process.poll() is None)):
         return {'loggedIn': _account_logged_in(platform, cfg), 'name': '', 'avatar': ''}
     if not confident:
+        if backend == 'xhs':
+            for prefix, safe in _xhs_safe_runner_diagnostics(getattr(proc, 'stderr', '')):
+                print(prefix + ' ' + json.dumps(safe, ensure_ascii=False), file=sys.stderr)
+            raise _xhs_whoami_failure_http(failure_payload)
         raise HTTPException(502, '未能确认当前账号身份，请稍后重试校验；原登录状态和账号资料保持不变')
     verified_logged_in = data['loggedIn']
     if backend == 'wechat-oa' and not verified_logged_in and _wechat_has_credentials():
@@ -4945,7 +5065,7 @@ async def api_publish_sms(platform: str, req: SmsCodeRequest):
 
 @app.post("/api/publish/{platform}")
 async def api_publish(platform: str, req: PublishRequest):
-    """一键发布：分发到对应 publisher 脚本真发（--exec）。二次确认在前端。"""
+    """提交到平台；小红书强制仅存草稿，不能由请求参数改成公开发布。"""
     _require_automated_publishing()
     cfg = LOGIN_RUNNERS.get(platform)
     if not cfg:
@@ -4975,7 +5095,7 @@ async def api_publish(platform: str, req: PublishRequest):
     if platform == 'xiaohongshu':
         base = [py, str(SHARED_SCRIPTS / 'xhs_publish.py')]
         cmd = base + ['publish-video', '--no-proxy', '--video', vids[0]] if vids else base + ['publish', '--no-proxy', '--images', ','.join(imgs)]
-        cmd += ['--title', title, '--content', req.body, '--tags', tags, '--exec']
+        cmd += ['--title', title, '--content', req.body, '--tags', tags, '--exec', '--draft']
     elif platform == 'bilibili':
         # B站投稿：直接调 biliup CLI（需 cookies.json，PATH 上有 biliup）。必须视频；
         # tid=36「知识」；B站投稿必须≥1 标签，无则兜底「日常」。
@@ -5036,19 +5156,49 @@ async def api_publish(platform: str, req: PublishRequest):
         proc = await asyncio.to_thread(subprocess.run, cmd, cwd=str(PROJECT_ROOT), env=pub_env,
                                        capture_output=True, text=True, timeout=600)
     except subprocess.TimeoutExpired:
-        raise HTTPException(504, '发布超时（媒体处理慢或流程卡住）')
+        raise HTTPException(504, '存草稿结果未确认，请先检查小红书创作者后台草稿，勿重复提交'
+                            if platform == 'xiaohongshu' else '发布超时（媒体处理慢或流程卡住）')
     ok = proc.returncode == 0
     tail = (proc.stderr or proc.stdout or '').strip().splitlines()
     detail = '\n'.join(tail[-8:])
+    auth_diagnostic = None
+    if platform == 'xiaohongshu':
+        # Exit zero alone proves neither a platform draft nor a public publish.
+        # Only the runner's final structured draft receipt can confirm this action.
+        lines = (proc.stdout or '').strip().splitlines()
+        try:
+            receipt = json.loads(lines[-1]) if lines else None
+        except (ValueError, TypeError):
+            receipt = None
+        ok = (ok and isinstance(receipt, dict)
+              and receipt.get('outcome') == 'draft_saved'
+              and receipt.get('published') is False)
+        if not ok and proc.returncode == 0:
+            detail = '未获得平台草稿保存确认；请先检查小红书创作者后台草稿，勿重复提交'
+        if isinstance(receipt, dict) and receipt.get('published') is False:
+            auth_codes = {'auth_required': 'XHS_AUTH_REQUIRED', 'auth_unknown': 'XHS_AUTH_UNKNOWN'}
+            state = receipt.get('outcome')
+            if isinstance(state, str) and state in auth_codes and receipt.get('error') == auth_codes[state]:
+                auth_diagnostic = {**_xhs_safe_auth_failure(receipt, 'publish_auth'), 'state': state}
+        # The detailed console stream can contain page URLs or exception payloads.
+        detail = ('已获得平台明确草稿保存确认' if ok else
+                  '本次未获得平台草稿保存确认；请根据安全错误原因处理，勿重复提交')
     try:
         with (OUTPUTS_DIR / '_publish.log').open('a', encoding='utf-8') as lf:
             lf.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} {platform} rc={proc.returncode} ok={ok} =====\n")
-            lf.write('CMD: ' + ' '.join(cmd) + '\n')
-            lf.write('STDOUT:\n' + (proc.stdout or '')[-2000:] + '\n')
-            lf.write('STDERR:\n' + (proc.stderr or '')[-2000:] + '\n')
+            if platform == 'xiaohongshu':
+                lf.write('MODE: draft_only\nRESULT: ' + json.dumps({
+                    'ok': ok, 'authDiagnostic': auth_diagnostic,
+                    'outcome': 'draft_saved' if ok else 'failed'}, ensure_ascii=False) + '\n')
+                for prefix, safe in _xhs_safe_runner_diagnostics(proc.stderr):
+                    lf.write(prefix + ' ' + json.dumps(safe, ensure_ascii=False) + '\n')
+            else:
+                lf.write('CMD: ' + ' '.join(cmd) + '\n')
+                lf.write('STDOUT:\n' + (proc.stdout or '')[-2000:] + '\n')
+                lf.write('STDERR:\n' + (proc.stderr or '')[-2000:] + '\n')
     except Exception:
         pass
-    if ok:
+    if ok and platform != 'xiaohongshu':
         try:
             items = _read_schedule()
             items.append({'id': uuid.uuid4().hex[:12], 'title': title,
@@ -5058,6 +5208,28 @@ async def api_publish(platform: str, req: PublishRequest):
             _write_schedule(items)
         except Exception:
             pass
+    if platform == 'xiaohongshu':
+        response = {'ok': ok, 'published': False, 'outcome': 'draft_saved' if ok else 'failed',
+                    'message': '已保存至小红书草稿，未公开发布', 'detail': detail}
+        if not ok:
+            # Show only mapped user-facing causes, never file paths/tracebacks.
+            runner_error = '\n'.join(line for line in (proc.stderr or '').splitlines()
+                                     if line.startswith('ERROR:'))
+            code, message = 'DRAFT_SAVE_FAILED', '小红书保存草稿失败，请检查账号状态和稿件内容'
+            if proc.returncode == 0 or '结果未确认' in runner_error or '无法核验' in runner_error:
+                code, message = 'DRAFT_SAVE_UNCONFIRMED', '小红书草稿保存结果尚未确认'
+            elif '草稿' in runner_error and '按钮' in runner_error:
+                code, message = 'DRAFT_BUTTON_NOT_FOUND', '未识别到可安全操作的小红书草稿保存按钮，未确认保存成功'
+            elif '未登录' in runner_error:
+                message = '小红书登录状态未确认，请到账号管理校验'
+            if auth_diagnostic:
+                response['authDiagnostic'] = auth_diagnostic
+                if auth_diagnostic['state'] == 'auth_required':
+                    message = '小红书创作平台要求登录，请到账号管理完成登录'
+                else:
+                    code, message = 'DRAFT_SAVE_UNCONFIRMED', '小红书认证状态尚未确认，请稍后校验账号'
+            response.update(errorCode=code, message=message)
+        return response
     return {'ok': ok, 'message': '发布成功' if ok else '发布失败（见 detail）', 'detail': detail}
 
 
@@ -5249,13 +5421,67 @@ _HOT_HOT_KEYS = ("hot", "hot_value", "HotValue", "hotValue", "num", "detail_text
 _HOT_URL_KEYS = ("url", "Url", "link", "mobil_url")
 
 
+import ssl
+
+# Python.org 3.11 常没有默认 CA 文件。只在这份上下文上追加 certifi，保留系统信任与主机名校验。
+_TREND_SSL: ssl.SSLContext | None = None
+_TREND_ERROR_RANK = {"源响应异常": 1, "网络异常": 2, "证书校验失败": 3}
+
+
+class _TrendFetch(list):
+    """条目列表；error 仅在全部源失败时有值，比较时仍按普通列表。"""
+
+    def __init__(self, items: list, error: str | None):
+        super().__init__(items)
+        self.error = error
+
+
+def _trend_ssl_context() -> ssl.SSLContext:
+    global _TREND_SSL
+    if _TREND_SSL is None:
+        import certifi
+        ctx = ssl.create_default_context()
+        ctx.load_verify_locations(cafile=certifi.where())
+        _TREND_SSL = ctx
+    return _TREND_SSL
+
+
 def _http_get_json(url: str, timeout: int = 8):
     req = urllib.request.Request(url, headers={
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
         "Accept": "application/json, text/plain, */*",
     })
-    with urllib.request.urlopen(req, timeout=timeout) as r:
+    with urllib.request.urlopen(req, timeout=timeout, context=_trend_ssl_context()) as r:
         return json.loads(r.read().decode("utf-8", "replace"))
+
+
+def _classify_trend_error(exc: BaseException) -> str:
+    """只返回固定中文类别，不带 URL、代理或证书路径。"""
+    reason: BaseException | str = exc
+    if isinstance(exc, urllib.error.HTTPError):
+        return "源响应异常"
+    if isinstance(exc, urllib.error.URLError):
+        if isinstance(exc.reason, BaseException):
+            reason = exc.reason
+        elif isinstance(exc.reason, str) and "CERTIFICATE" in exc.reason.upper():
+            return "证书校验失败"
+        else:
+            return "网络异常"
+    if isinstance(reason, ssl.SSLError) or isinstance(exc, ssl.SSLError):
+        return "证书校验失败"
+    if isinstance(reason, (TimeoutError, socket.timeout)):
+        return "网络异常"
+    if isinstance(exc, urllib.error.URLError) or isinstance(reason, OSError):
+        return "网络异常"
+    if isinstance(exc, json.JSONDecodeError):
+        return "源响应异常"
+    return "源响应异常"
+
+
+def _prefer_trend_error(current: str | None, new: str) -> str:
+    if current is None or _TREND_ERROR_RANK.get(new, 0) >= _TREND_ERROR_RANK.get(current, 0):
+        return new
+    return current
 
 
 def _pick_str(data: object, keys: tuple[str, ...]) -> str:
@@ -5299,43 +5525,138 @@ def _parse_hot(obj: object) -> list[dict]:
     return out
 
 
-def _fetch_platform(pf: str) -> list[dict]:
+def _fetch_platform(pf: str) -> list:
     primary, backup = TREND_SOURCES.get(pf, (None, None))
+    seen: str | None = None
     for url in (primary, backup):
         if not url:
             continue
         try:
             items = _parse_hot(_http_get_json(url))
-            if items:
-                return items
-        except Exception:
+        except Exception as exc:
+            seen = _prefer_trend_error(seen, _classify_trend_error(exc))
             continue
-    return []
+        if items:
+            return _TrendFetch(items, None)
+        seen = _prefer_trend_error(seen, "源响应异常")
+    return _TrendFetch([], seen or "源响应异常")
+
+
+def _trend_row(pf: str, items: list, limit_n: int, *, stale: bool,
+               updated_at: int | None, error: str | None) -> dict:
+    return {
+        "platform": pf,
+        "label": TREND_LABELS.get(pf, pf),
+        "items": list(items)[:limit_n],
+        "ok": bool(items),
+        "stale": stale,
+        "updated_at": updated_at,
+        "error": error,
+    }
+
+
+def _trends_updated(rows: list[dict], now: float) -> int:
+    """只有本次每个平台都新取到，updated 才是现在。失败或过期缓存不标成刚刚更新。"""
+    if not rows:
+        return int(now)
+    if all(row.get("error") is None and not row.get("stale") and row.get("updated_at") == int(now)
+           for row in rows):
+        return int(now)
+    if any(row.get("error") or row.get("stale") for row in rows):
+        times = [row["updated_at"] for row in rows if isinstance(row.get("updated_at"), int)]
+        if times and len(times) == len(rows):
+            return min(times)
+        return 0
+    times = [row["updated_at"] for row in rows if isinstance(row.get("updated_at"), int)]
+    return min(times) if len(times) == len(rows) else 0
+
+
+@app.get("/api/insurance/trends")
+async def api_insurance_trends(query: str = "", limit: int = 30):
+    """保险行业及医保政策资讯；与平台热搜分开，不声明平台热度。"""
+    from easel.insurance_trends import insurance_trends
+    return await insurance_trends(query=query[:200], limit=max(1, min(limit, 60)))
+
+
+def _xhs_notes_response(result) -> dict:
+    """Keep the adapter envelope intact; fail safely on a broken local contract."""
+    required = {'query', 'items', 'source', 'fetched_at', 'cached', 'error'}
+    item_fields = {'id', 'title', 'body', 'content_status', 'images', 'url', 'author',
+                   'metrics', 'published_at'}
+    valid = (isinstance(result, dict) and required <= result.keys()
+             and isinstance(result['query'], str) and isinstance(result['source'], str)
+             and isinstance(result['items'], list) and isinstance(result['cached'], bool)
+             and (result['fetched_at'] is None or isinstance(result['fetched_at'], str)))
+    if valid:
+        valid = all(isinstance(item, dict) and item_fields <= item.keys()
+                    for item in result['items'])
+        error = result['error']
+        valid = valid and (error is None or (
+            isinstance(error, dict) and isinstance(error.get('code'), str)
+            and isinstance(error.get('message'), str) and isinstance(error.get('retryable'), bool)))
+    if not valid:
+        raise HTTPException(502, '小红书笔记读取暂时不可用。')
+    if result['error'] and result['error']['code'] in ('invalid_query', 'invalid_limit', 'invalid_url'):
+        raise HTTPException(400, '小红书笔记请求参数无效。')
+    return result
+
+
+@app.get('/api/xhs/notes/search')
+async def api_xhs_notes_search(request: Request):
+    """One read-only keyword page; no automatic fetch, ranking or publish action."""
+    from easel.xhs_notes import search_notes
+    values = request.query_params.getlist('q')
+    query = values[0] if len(values) == 1 else ''
+    if (not query.strip() or len(query) > 100 or query.strip().startswith('-')
+            or re.search(r'[\x00-\x1f\x7f]', query)):
+        raise HTTPException(400, '关键词须为1至100个字符，且不能以选项符号开头。')
+    try:
+        result = await asyncio.to_thread(search_notes, query)
+    except Exception:
+        raise HTTPException(502, '小红书笔记读取暂时不可用。') from None
+    return _xhs_notes_response(result)
+
+
+@app.get('/api/xhs/notes/detail')
+async def api_xhs_notes_detail(request: Request):
+    """Read a validated official note URL via the existing bounded CLI adapter."""
+    from easel.xhs_notes import _canonical_url, _CliError, read_note
+    values = request.query_params.getlist('url')
+    url = values[0] if len(values) == 1 else ''
+    try:
+        _canonical_url(url)
+    except _CliError:
+        raise HTTPException(400, '请使用HTTPS小红书官方笔记链接；当前不支持短链。') from None
+    try:
+        result = await asyncio.to_thread(read_note, url)
+    except Exception:
+        raise HTTPException(502, '小红书笔记读取暂时不可用。') from None
+    return _xhs_notes_response(result)
 
 
 @app.get("/api/trends")
 async def api_trends(platforms: str = "weibo,douyin,zhihu", limit: int = 12):
     pfs = [p.strip() for p in platforms.split(",") if p.strip() in TREND_SOURCES]
     now = time.time()
-    loop = asyncio.get_event_loop()
-    result = []
-    for pf in pfs:
-        c = _TREND_CACHE.get(pf)
-        if c and now - c[0] < 300:
-            items = c[1]
-        else:
-            items = await loop.run_in_executor(None, _fetch_platform, pf)
-            if items:
-                _TREND_CACHE[pf] = (now, items)
-            elif c:
-                items = c[1]
-        result.append({
-            "platform": pf,
-            "label": TREND_LABELS.get(pf, pf),
-            "items": items[:max(1, min(limit, 30))],
-            "ok": bool(items),
-        })
-    return {"trends": result, "updated": int(now)}
+    limit_n = max(1, min(limit, 30))
+    loop = asyncio.get_running_loop()
+
+    async def one(pf: str) -> dict:
+        cached = _TREND_CACHE.get(pf)
+        if cached and now - cached[0] < 300:
+            return _trend_row(pf, cached[1], limit_n, stale=False, updated_at=int(cached[0]), error=None)
+        fetched = await loop.run_in_executor(None, _fetch_platform, pf)
+        if fetched:
+            items = list(fetched)
+            _TREND_CACHE[pf] = (now, items)
+            return _trend_row(pf, items, limit_n, stale=False, updated_at=int(now), error=None)
+        err = getattr(fetched, "error", None) or "源响应异常"
+        if cached:
+            return _trend_row(pf, cached[1], limit_n, stale=True, updated_at=int(cached[0]), error=err)
+        return _trend_row(pf, [], limit_n, stale=False, updated_at=None, error=err)
+
+    rows = list(await asyncio.gather(*(one(pf) for pf in pfs)))
+    return {"trends": rows, "updated": _trends_updated(rows, now)}
 
 
 SCHEDULE_FILE = OUTPUTS_DIR / "_schedule.json"

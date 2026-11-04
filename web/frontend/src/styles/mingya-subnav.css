@@ -1,0 +1,10 @@
+/* Shared six existing tool routes, styled from calendar.png. */
+.reference-subnav { height:56px; min-height:56px; min-width:0; margin:0 14px 18px 19px; padding:0 18px; border:1px solid var(--border); border-radius:14px; background:var(--surface); }
+.reference-subnav .subnav-tabs { height:100%; min-width:max-content; gap:22px; }
+.reference-subnav .subnav-tab { position:relative; height:100%; padding:0 12px; border-radius:0; color:var(--text); font-size:18px; line-height:1.4; }
+.reference-subnav .subnav-tab.active { background:transparent; color:var(--text); font-weight:650; }
+.reference-subnav .subnav-tab:hover { background:var(--surface-2); }
+.reference-subnav .subnav-active-rule { position:absolute; right:8px; bottom:0; left:8px; height:4px; border-radius:3px; background:var(--brand-gold); }
+@media(min-width:901px) and (max-width:1450px) { .reference-subnav { height:48px; min-height:48px; margin-bottom:16px; } .reference-subnav .subnav-tab { font-size:16px; } }
+@media(min-width:1101px) and (max-height:820px) { .reference-subnav { height:44px; min-height:44px; margin-bottom:14px; padding:0 14px; } .reference-subnav .subnav-tabs { gap:16px; } .reference-subnav .subnav-tab { font-size:14px; padding:0 10px; } .reference-subnav .subnav-active-rule { height:3px; } }
+@media(max-width:900px) { .reference-subnav { height:44px; min-height:44px; margin:0 12px 12px; padding:0 8px; border-radius:10px; } .reference-subnav .subnav-tabs { gap:5px; } .reference-subnav .subnav-tab { padding:0 10px; font-size:13px; } .reference-subnav .subnav-active-rule { height:3px; } }

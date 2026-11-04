@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { fetchHarnessModels, fetchHarnessSettings, saveHarnessSettings } from '../lib/api';
 import type { HarnessModel, HarnessSettingsResponse } from '../lib/api';
 import SettingsSelect from './SettingsSelect';
+import { IconRefresh } from './icons';
 
 export default function HarnessSettings({ onChange, onSelect }: {
   onChange: (runtime: string) => void;
@@ -79,15 +80,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
 
   return (
     <section className="st-panel active harness-settings" aria-label="Agent 底座设置">
-      <div className="panel-top">
-        <strong>Agent 底座</strong>
-        <span className="desc">选择仅聊天，或使用 Agent 执行工具</span>
-        <span className="spacer" />
-        <button className="btn btn-sm" disabled={!settings || settingsLoading || busy || settings.locked || !selected?.installed}
-          onClick={() => void save()}>{busy ? '保存中…' : '保存底座'}</button>
-        <button className="btn btn-sm" disabled={settingsLoading || busy}
-          onClick={() => setRefresh((previous) => previous + 1)}>{settingsLoading ? '读取中…' : '重新读取'}</button>
-      </div>
+      <div className="harness-heading"><strong className="settings-section-title"><span className="settings-title-mark" />Agent 底座</strong><p className="desc">配置笔记对话与脚本生成所使用的执行引擎（Agent 底座），决定 AI 如何处理你的需求与任务。</p></div>
       <div className="settings-field">
         <span className="settings-field-label">执行引擎</span>
         <div className="settings-field-body">
@@ -116,7 +109,14 @@ export default function HarnessSettings({ onChange, onSelect }: {
                 需要工具时可切换到 OpenClaw、OpenCode、Codex 或其它 Agent。切换后请新建对话，旧历史保留。
               </span>
             </span>
+            <div className="settings-engine-actions">
+              <button className="btn btn-sm btn-primary harness-save" disabled={!settings || settingsLoading || busy || settings.locked || !selected?.installed}
+                onClick={() => void save()}>{busy ? '保存中…' : '保存底座'}</button>
+              <button className="btn btn-sm" disabled={settingsLoading || busy}
+                onClick={() => setRefresh((previous) => previous + 1)}><IconRefresh size={18} />{settingsLoading ? '读取中…' : '重新读取'}</button>
+            </div>
           </div>
+          <div className="harness-mode-information"><span className="harness-info-icon" aria-hidden="true">ⓘ</span><div><strong>当前模式：{selected?.label || runtime}</strong>
           <p className="desc">{runtime === 'api' ? '模型 API 直连 · 无需安装 Agent，模型在下方配置'
             : runtime === 'openclaw' ? 'OpenClaw 的模型、API 地址和 Key 在下方配置，保存后同步到 gateway'
             : `${selected?.protocol || ''} · 连接由适配器管理，无需另选连接方式`}</p>
@@ -126,6 +126,7 @@ export default function HarnessSettings({ onChange, onSelect }: {
               安装或调整路径后重启 Web。原有配置未删除，安装前不能保存为执行引擎。</p>
           )}
           {runtime !== settings?.runtime && <p className="desc">当前为配置预览；请先「保存底座」，再保存下方 API 配置。旧对话不迁移。</p>}
+          </div></div>
         </div>
       </div>
       {runtime !== 'openclaw' && runtime !== 'api' && (

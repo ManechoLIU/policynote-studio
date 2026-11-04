@@ -7,7 +7,12 @@
 from __future__ import annotations
 
 import asyncio
+import json
+import ssl
 import sys
+import threading
+import time
+import urllib.error
 from pathlib import Path
 
 import pytest
@@ -139,3 +144,180 @@ def test_trends_reuses_cached_items_when_all_sources_fail(monkeypatch):
     data = asyncio.run(web.api_trends("weibo", 15))
     assert data["trends"][0]["items"] == items
     assert data["trends"][0]["ok"] is True
+    assert data["trends"][0]["stale"] is True
+    assert data["trends"][0]["error"] == "源响应异常"
+    assert data["trends"][0]["updated_at"] == 0
+    assert data["updated"] == 0
+
+
+def test_fetch_stops_after_primary_hits(monkeypatch):
+    primary, _backup = web.TREND_SOURCES["douyin"]
+    calls = []
+
+    def fetch(url):
+        calls.append(url)
+        return {"data": [{"title": "主源"}]}
+
+    monkeypatch.setattr(web, "_http_get_json", fetch)
+    assert web._fetch_platform("douyin")[0]["title"] == "主源"
+    assert calls == [primary]
+
+
+def test_http_get_json_uses_certifi_and_keeps_tls_checks(monkeypatch):
+    seen = {}
+
+    class Resp:
+        def read(self):
+            return b'{"data":[]}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    def urlopen(req, timeout=None, context=None):
+        seen["timeout"] = timeout
+        seen["context"] = context
+        return Resp()
+
+    monkeypatch.setattr(web.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(web, "_TREND_SSL", None)
+    assert web._http_get_json("https://example.test/hot") == {"data": []}
+    ctx = seen["context"]
+    assert seen["timeout"] == 8
+    assert isinstance(ctx, ssl.SSLContext)
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    assert ctx.check_hostname is True
+    assert ctx.verify_mode != ssl.CERT_NONE
+    assert len(ctx.get_ca_certs()) > 0
+
+
+def test_ssl_context_appends_certifi_bundle(monkeypatch):
+    calls = []
+    real = ssl.SSLContext.load_verify_locations
+
+    def spy(self, cafile=None, capath=None, cadata=None):
+        calls.append(cafile)
+        return real(self, cafile=cafile, capath=capath, cadata=cadata)
+
+    monkeypatch.setattr(ssl.SSLContext, "load_verify_locations", spy)
+    monkeypatch.setattr(web, "_TREND_SSL", None)
+    ctx = web._trend_ssl_context()
+    assert any(isinstance(ca, str) and ca.endswith("cacert.pem") for ca in calls)
+    assert ctx.verify_mode == ssl.CERT_REQUIRED
+    assert ctx.check_hostname is True
+
+
+@pytest.mark.parametrize("exc,kind", [
+    (ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED"), "证书校验失败"),
+    (urllib.error.URLError(ssl.SSLCertVerificationError("unable to get local issuer certificate")), "证书校验失败"),
+    (urllib.error.URLError(TimeoutError("timed out")), "网络异常"),
+    (urllib.error.URLError("CERTIFICATE_VERIFY_FAILED"), "证书校验失败"),
+    (urllib.error.HTTPError("https://secret.example/hot", 502, "bad", {}, None), "源响应异常"),
+    (json.JSONDecodeError("expecting value", "<html>", 0), "源响应异常"),
+])
+def test_source_errors_are_typed_and_do_not_leak(exc, kind):
+    assert web._classify_trend_error(exc) == kind
+    assert "http" not in web._classify_trend_error(exc)
+    assert "secret" not in web._classify_trend_error(exc)
+
+
+def test_certificate_failure_is_visible_without_cache(monkeypatch):
+    def boom(_url):
+        raise urllib.error.URLError(ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED unable to get local issuer"))
+
+    monkeypatch.setattr(web, "_http_get_json", boom)
+    data = asyncio.run(web.api_trends("weibo", 12))
+    row = data["trends"][0]
+    assert row["ok"] is False and row["items"] == []
+    assert row["stale"] is False
+    assert row["error"] == "证书校验失败"
+    assert row["updated_at"] is None
+    assert data["updated"] == 0
+    assert "http" not in row["error"] and "issuer" not in row["error"]
+
+
+def test_primary_certificate_error_still_uses_backup(monkeypatch):
+    primary, backup = web.TREND_SOURCES["weibo"]
+
+    def fetch(url):
+        if url == primary:
+            raise urllib.error.URLError(ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED"))
+        return {"data": [{"title": "备用热点", "hot": "1"}]}
+
+    monkeypatch.setattr(web, "_http_get_json", fetch)
+    data = asyncio.run(web.api_trends("weibo", 12))
+    row = data["trends"][0]
+    assert row["ok"] is True and row["items"][0]["title"] == "备用热点"
+    assert row["stale"] is False and row["error"] is None
+    assert data["updated"] == row["updated_at"]
+
+
+def test_network_failure_prefers_certificate_when_both_fail(monkeypatch):
+    primary, backup = web.TREND_SOURCES["zhihu"]
+
+    def fetch(url):
+        if url == primary:
+            raise urllib.error.URLError(ssl.SSLCertVerificationError("CERTIFICATE_VERIFY_FAILED"))
+        raise urllib.error.URLError(TimeoutError("timed out"))
+
+    monkeypatch.setattr(web, "_http_get_json", fetch)
+    data = asyncio.run(web.api_trends("zhihu", 12))
+    assert data["trends"][0]["error"] == "证书校验失败"
+    assert data["updated"] == 0
+
+
+def test_fresh_cache_skips_network_and_is_not_stale(monkeypatch):
+    ts = time.time() - 10
+    items = [{"title": "新缓存", "hot": "1", "url": ""}]
+    web._TREND_CACHE["weibo"] = (ts, items)
+
+    def boom(_url):
+        raise AssertionError("fresh cache must not fetch")
+
+    monkeypatch.setattr(web, "_http_get_json", boom)
+    before = int(time.time())
+    data = asyncio.run(web.api_trends("weibo", 15))
+    row = data["trends"][0]
+    assert row["items"] == items and row["ok"] is True
+    assert row["stale"] is False and row["error"] is None
+    assert row["updated_at"] == int(ts)
+    assert data["updated"] == int(ts)
+    assert data["updated"] < before
+
+
+def test_platforms_fetch_concurrently(monkeypatch):
+    state = {"n": 0, "overlap": False}
+    lock = threading.Lock()
+
+    def fetch(_url):
+        with lock:
+            state["n"] += 1
+            if state["n"] >= 2:
+                state["overlap"] = True
+        time.sleep(0.25)
+        with lock:
+            state["n"] -= 1
+        return {"data": [{"title": "并发热点"}]}
+
+    monkeypatch.setattr(web, "_http_get_json", fetch)
+    started = time.perf_counter()
+    data = asyncio.run(web.api_trends("weibo,douyin", 5))
+    elapsed = time.perf_counter() - started
+    assert state["overlap"] is True
+    assert elapsed < 0.45
+    assert [g["platform"] for g in data["trends"]] == ["weibo", "douyin"]
+    assert all(g["ok"] and g["error"] is None for g in data["trends"])
+
+
+def test_limit_clamp_and_cache_keeps_full_list(monkeypatch):
+    monkeypatch.setattr(
+        web, "_fetch_platform",
+        lambda pf: [{"title": str(i), "hot": "", "url": ""} for i in range(40)],
+    )
+    wide = asyncio.run(web.api_trends("weibo", 100))
+    assert len(wide["trends"][0]["items"]) == 30
+    narrow = asyncio.run(web.api_trends("weibo", 0))
+    assert len(narrow["trends"][0]["items"]) == 1
+    assert narrow["trends"][0]["stale"] is False

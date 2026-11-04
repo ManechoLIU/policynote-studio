@@ -1,0 +1,75 @@
+/* The approved skills reference has a fixed layer rail and a three-column catalog. */
+.strict-skills-page { height: 100%; overflow-y: auto; padding: 0 14px 60px 19px; color: #171f2e; background: #f8faff; }
+.strict-skills-page .reference-page-banner { height: 220px; min-height: 220px; margin: 0 0 23px; padding: 22px 40px; border-radius: 15px; overflow: hidden; background: linear-gradient(100deg, #fcf7ef, #fff1dc); }
+.strict-skills-page .reference-banner-copy { position: relative; z-index: 1; }
+.strict-skills-page .reference-banner-copy h1 { margin: 0; font-size: 52px; font-weight: 750; line-height: 1.2; letter-spacing: 0; }
+.strict-skills-page .reference-section-mark { display: inline-flex; align-items: center; gap: 20px; }
+.strict-skills-page .reference-gold-rule { display: inline-block; width: 8px; height: 42px; border-radius: 6px; background: #ff9908; }
+.strict-skills-page .reference-banner-copy > p { margin: 0 0 22px 22px; font-size: 24px; line-height: 34px; color: #303b4d; }
+.strict-skills-page .reference-banner-art { position: absolute !important; right: 0; top: 0; width: 620px; height: 220px; }
+.strict-skills-page .strict-skill-search { display: flex; align-items: center; gap: 12px; width: 552px; max-width: calc(100% - 480px); }
+.strict-skills-page .strict-skill-search-field { display: flex; align-items: center; flex: 1; gap: 11px; min-width: 0; height: 49px; padding: 0 16px; border: 1px solid #bdc5ce; border-radius: 12px; color: #646c77; background: #ffffffd9; }
+.strict-skills-page .strict-skill-search-field input { width: 100%; min-width: 0; border: 0; outline: 0; background: none; color: #303745; font-size: 19px; }
+.strict-skills-page .strict-skill-search-field svg { flex-shrink: 0; }
+.strict-skills-page .strict-search-clear { border: 0; background: none; color: #e6193f; white-space: nowrap; font-size: 14px; cursor: pointer; }
+.strict-skills-page .strict-skill-search-submit { flex: 0 0 92px; height: 49px; border: 1px solid #ff0037; border-radius: 12px; background: #ff073b; color: #fff; font-size: 20px; font-weight: 600; cursor: pointer; }
+.strict-skills-page .strict-skills-layout { display: grid; grid-template-columns: 267px minmax(0, 1fr); gap: 9px; align-items: start; }
+.strict-skills-page .strict-skills-layers { display: flex; flex-direction: column; gap: 16px; width: 267px; min-height: 642px; padding: 15px 8px; border: 1px solid #e1e7f0; border-radius: 15px; background: #ffffff36; }
+.strict-skills-page .strict-layer-item { display: flex; align-items: center; gap: 15px; height: 82px; width: 100%; padding: 10px 15px; border: 1px solid #e0e7f0; border-radius: 15px; background: #ffffff40; text-align: left; cursor: pointer; color: #1d283c; }
+.strict-skills-page .strict-layer-item.is-active { height: 89px; border-color: transparent; background: #fff2e2; }
+.strict-skills-page .strict-layer-icon { display: inline-flex; align-items: center; justify-content: center; color: #2875bc; flex: 0 0 39px; }
+.strict-skills-page .strict-layer-item.is-active .strict-layer-icon, .strict-skills-page .strict-layer-item.is-active > svg { color: #ff8a00; }
+.strict-skills-page .strict-layer-copy { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 5px; }
+.strict-skills-page .strict-layer-copy strong { font-size: 22px; line-height: 28px; color: #101722; font-weight: 700; }
+.strict-skills-page .strict-layer-copy > span { font-size: 14px; line-height: 21px; color: #414d60; white-space: nowrap; }
+.strict-skills-page .strict-layer-item > svg { flex-shrink: 0; color: #6b7381; }
+.strict-skills-page .strict-skills-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
+.strict-skills-page .strict-skill-card { display: flex; flex-direction: column; gap: 0; min-width: 0; min-height: 207px; height: 207px; margin: 0; padding: 20px 19px 15px; border: 1px solid #dce3ee; border-radius: 15px; background: #ffffff72; text-align: left; color: #1b2538; cursor: pointer; scroll-margin-top: 15px; }
+.strict-skills-page .strict-skill-card:hover { border-color: #c5cede; background: #fff; }
+.strict-skills-page .strict-skill-card-head { display: flex; gap: 15px; min-width: 0; align-items: center; }
+.strict-skills-page .strict-skill-icon { display: inline-flex; flex: 0 0 62px; width: 62px; height: 62px; border-radius: 15px; align-items: center; justify-content: center; color: #286fb6; background: #e9f3ff; }
+.strict-skills-page .strict-skill-icon.is-warm { color: #ff8a00; background: #fff4e3; }
+.strict-skills-page .strict-skill-heading { display: flex; flex-direction: column; min-width: 0; gap: 5px; }
+.strict-skills-page .strict-skill-heading strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 24px; line-height: 31px; font-weight: 700; color: #101827; }
+.strict-skills-page .strict-skill-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; line-height: 23px; color: #3f4c64; }
+.strict-skills-page .strict-skill-description { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; min-height: 44px; margin-top: 16px; font-size: 16px; line-height: 22px; color: #303b4e; }
+.strict-skills-page .strict-skill-footer { display: flex; align-items: center; justify-content: space-between; min-height: 30px; margin-top: auto; gap: 8px; }
+.strict-skills-page .strict-skill-status { display: inline-flex; align-items: center; gap: 7px; min-height: 29px; padding: 2px 11px; border: 1px solid #aadea6; border-radius: 9px; color: #008a0a; background: #f0fff0; font-size: 15px; line-height: 21px; white-space: nowrap; }
+.strict-skills-page .strict-skill-status.needs-api { border-color: #ffa637; color: #ff8500; background: #fffaf0; }
+.strict-skills-page .strict-skill-status.not-required { border-color: #d4dce8; color: #465777; background: #e9f3ff; }
+.strict-skills-page .strict-configured-check { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border: 1.5px solid currentColor; border-radius: 50%; }
+.strict-skills-page .strict-skill-details { display: inline-flex; align-items: center; gap: 4px; color: #ff0036; font-size: 15px; font-weight: 600; white-space: nowrap; }
+.strict-skills-page .strict-skills-error { padding: 16px 0; color: #dc2442; font-size: 16px; }
+.strict-skills-page .empty-state { min-height: 240px; font-size: 18px; }
+@media (max-width: 1300px) {
+  .strict-skills-page .strict-skills-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+  .strict-skills-page .strict-skills-layers { width: 220px; }
+  .strict-skills-page .strict-layer-item { padding: 10px; gap: 9px; }
+  .strict-skills-page .strict-layer-copy strong { font-size: 20px; }
+  .strict-skills-page .strict-layer-copy > span { font-size: 12px; }
+  .strict-skills-page .strict-skills-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .strict-skills-page .reference-banner-art { width: 500px; }
+  .strict-skills-page .strict-skill-search { max-width: 65%; }
+}
+@media (max-width: 900px) {
+  .strict-skills-page { padding: 0 16px 40px; }
+  .strict-skills-page .reference-page-banner { padding: 22px; }
+  .strict-skills-page .reference-banner-copy h1 { font-size: 40px; }
+  .strict-skills-page .reference-banner-copy > p { font-size: 19px; }
+  .strict-skills-page .reference-banner-art { width: 380px; opacity: .45; }
+  .strict-skills-page .strict-skill-search { max-width: 100%; width: 552px; }
+  .strict-skills-page .strict-skills-layout { display: block; }
+  .strict-skills-page .strict-skills-layers { width: 100%; min-height: 0; display: flex; flex-direction: row; overflow-x: auto; margin-bottom: 16px; padding: 8px; gap: 8px; }
+  .strict-skills-page .strict-layer-item, .strict-skills-page .strict-layer-item.is-active { flex: 0 0 150px; height: 64px; }
+  .strict-skills-page .strict-layer-copy > span { display: none; }
+  .strict-skills-page .strict-layer-icon { flex-basis: 30px; }
+}
+@media (max-width: 650px) {
+  .strict-skills-page .strict-skills-grid { grid-template-columns: 1fr; }
+  .strict-skills-page .reference-banner-copy h1 { font-size: 36px; }
+  .strict-skills-page .reference-banner-copy > p { margin-left: 0; font-size: 17px; }
+  .strict-skills-page .strict-skill-search-field input { font-size: 16px; }
+  .strict-skills-page .strict-skill-search-submit { flex-basis: 70px; }
+}
+
+.strict-skills-page .reference-page-banner { background: #fff8ef; }

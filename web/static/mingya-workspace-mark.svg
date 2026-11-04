@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>明亚内部创作工作台标记</title>
+  <defs><radialGradient id="sun" cx=".35" cy=".28" r=".75"><stop stop-color="#FFD787"/><stop offset=".68" stop-color="#F1A53D"/><stop offset="1" stop-color="#E89532"/></radialGradient></defs>
+  <path d="M48 9c12 8 15 25 7 37-7 11-21 16-33 10 12 2 23-4 28-14 6-11 5-23-2-33Z" fill="#5275A5"/>
+  <circle cx="27" cy="28" r="22" fill="url(#sun)"/>
+</svg>

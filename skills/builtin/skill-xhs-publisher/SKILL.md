@@ -1,7 +1,7 @@
 ---
 name: skill-xhs-publisher
 description: |
-  将图文/视频内容发布到小红书（XHS）。基于 Playwright + 持久化登录态，headless 即可运行，
+  将图文/视频内容保存为小红书（XHS）平台草稿，不自动公开发布。基于 Playwright + 持久化登录态，headless 即可运行，
   流程与选择器移植自成熟开源实现 xiaohongshu-mcp（含发布成功校验、上传完成等待、话题联想绑定、
   新旧发布按钮兼容、反检测）。适用场景：发布图文笔记、发布视频、扫码登录、发布前预检。
 layer: publish
@@ -9,12 +9,12 @@ layer: publish
 
 # 小红书发布助手（xhs-publisher）
 
-你是"小红书发布助手"。目标是在用户确认后，调用 `xhs_publish.py` 完成**图文/视频发布**。
+你是"小红书发布助手"。当前项目只允许调用 `xhs_publish.py` 将图文/视频保存为**小红书平台草稿**，由用户在官方页面手动发布。不得自动点击公开发布、改用其他脚本/接口绕过此限制。
 
 ## 运行方式（Playwright，headless 可用）
 
 统一走确定性脚本 **`../../shared/scripts/xhs_publish.py`**（CWD=项目根）。它用 Playwright +
-持久化登录态驱动小红书创作者后台，headless 即可发布——**替代了旧的 CDP-to-真实Chrome 死栈**
+持久化登录态驱动小红书创作者后台，执行时仅保存草稿——**替代了旧的 CDP-to-真实Chrome 死栈**
 （那套需桌面 Chrome，本环境跑不了，已删除）。
 
 | 依赖 | 说明 |
@@ -25,7 +25,7 @@ layer: publish
 
 ## 能力范围
 
-- **本 SKILL 现做**：图文发布、视频发布、扫码登录、发布前预检（plan）。
+- **本 SKILL 现做**：图文/视频存草稿、扫码登录、提交前预检（plan）。
 - **评论区互动**（抓评论 + 回复）已拆分到 **skill-xhs-comment-reply**（与本 SKILL 共用登录态）。
 - **暂未移植（后续按需）**：首页/搜索/详情抓取、点赞/收藏/私信——选择器在参考实现里都有，
   需要时再移植；"分析爆款规律/数据洞察"走 **xhs-analyzer**。
@@ -59,9 +59,9 @@ check（环境就绪？）
   → 未登录 → login（有头扫码，一次即可）
   → plan（dry-run 预检：标题长度/媒体路径/步骤）— 给用户确认最终标题、正文、图片/视频
   → 发布前人设检查（见下）
-  → publish / publish-video --exec（首次建议加 --headed 校验选择器，OK 后 headless 复跑）
-  → 成功校验（脚本内置：URL 离开 /publish/publish 才算成功）
-  → 发布后留痕（见下）
+  → publish / publish-video --exec --draft（省略 --draft 也只能存草稿）
+  → 明确的草稿保存成功提示 + 脚本 draft_saved / published:false 收据
+  → 告知用户去小红书创作者后台草稿确认、手动发布
 ```
 
 ## 发布前人设检查（有 Profile 时）
@@ -70,14 +70,9 @@ check（环境就绪？）
 `python skills/shared/scripts/persona_gate.py check --score 85`——低于 80 分时告知分数、偏离点和
 修改建议，但不阻断发布；用户已明确要发布就继续执行。
 
-## 发布后留痕（供监控/归因）
+## 草稿结果边界
 
-```
-python skills/shared/scripts/persona_gate.py record --topic 露营攻略 --profile 户外达人 \
-  --score 85 --verdict pass
-python skills/builtin/skill-publish-log/scripts/log.py record --platform 小红书 \
-  --title "周末露营攻略" --profile 户外达人 --persona-score 85 --persona-verdict pass --skill-source skill-xhs-publisher
-```
+草稿不是已发布：不得写已发布日历、发布日志或声称公开发布成功。仅页面跳转、表单清空、退出码0都不足以确认草稿保存。无明确草稿按钮或保存回执时停止报错，先请用户检查官方草稿，禁止盲目重试；不保证网页草稿与手机App草稿同步。
 
 ## 必做约束
 

@@ -1,0 +1,290 @@
+/* Preserve the 1536px reference; fit the same hierarchy to laptop windows. */
+@media (min-width: 901px) and (max-width: 1450px) {
+  :root { --sidebar-width: 224px; }
+  body { font-size: 16px; }
+  .strict-sidebar { width: 224px; min-width: 224px; }
+  .strict-sidebar .sidebar-logo { height: 64px; margin-bottom: 14px; }
+  .sidebar-reference-logo { width: 166px; }
+  .strict-sidebar .persona-select { height: 44px; font-size: 13px; }
+  .strict-sidebar .sidebar-nav { padding-top: 6px; }
+  .strict-sidebar .nav-item { height: 44px; min-height: 44px; font-size: 17px; gap: 12px; padding: 0 16px; }
+  .strict-sidebar .nav-icon, .strict-sidebar .nav-icon svg { width: 22px; height: 22px; }
+  .sidebar-settings { font-size: 17px; gap: 12px; }
+  .sidebar-workspace-note { font-size: 15px; }
+  .workspace-topbar { height: 56px; min-height: 56px; padding-left: 24px; }
+  .workspace-breadcrumb strong, .workspace-breadcrumb button { font-size: 16px; }
+  .workspace-utility { height: 34px; font-size: 14px; padding: 0 16px; }
+  .workspace-avatar { width: 34px; height: 34px; }
+  .btn { min-height: 38px; font-size: 15px; }
+
+  .mingya-dash { padding-left: 20px; padding-right: 20px; }
+  .my-hero { height: 300px; }
+  .my-hero-copy { padding: 24px 30px; }
+  .my-eyebrow { font-size: 17px; line-height: 26px; }
+  .my-hero h1 { margin-top: 10px; font-size: 44px; line-height: 51px; }
+  .my-hero-description { font-size: 15px; line-height: 24px; margin-top: 10px; max-width: 420px; }
+  .my-hero-actions { margin-top: 24px; gap: 16px; }
+  .my-hero-actions .btn { height: 44px; min-width: 155px; padding: 0 18px; font-size: 16px; border-radius: 13px; }
+  .my-course-path { height: 84px; padding: 14px 30px; gap: 10px; }
+  .my-course-step { gap: 14px; }
+  .my-course-icon { width: 52px; }
+  .my-course-step h2 { font-size: 18px; line-height: 25px; }
+  .my-course-step p { font-size: 13px; line-height: 21px; }
+  .my-course-dots { flex-basis: 60px; letter-spacing: 2px; }
+  .my-question-card, .my-space-card { height: 280px; padding: 14px 20px; }
+  .my-question-card h2, .my-space-card h2, .my-continue h2 { font-size: 20px; line-height: 29px; }
+  .my-question-caption { font-size: 13px; line-height: 21px; }
+  .my-example-questions > button { min-height: 40px; padding: 6px 11px; gap: 13px; font-size: 14px; }
+  .my-topic-library { height: 33px; margin-top: 11px; font-size: 14px; }
+  .my-space-stats strong { font-size: 23px; }
+  .my-notebook-art { width: 190px; margin-top: 16px; }
+  .my-space-caption { font-size: 14px; line-height: 23px; }
+  .my-recent-content, .my-start-note { min-height: 72px; padding: 14px 20px; font-size: 15px; }
+  .my-start-note > span, .my-start-note .btn { font-size: 14px; }
+
+  .strict-chat-page .chat-hero { padding: 26px 32px 46px; min-height: calc(100dvh - 56px); }
+  .strict-chat-page .chat-hero-brand { height: 48px; margin-top: 18px; font-size: 16px; }
+  .strict-chat-page .chat-hero-brand strong { font-size: 20px; }
+  .strict-chat-page .chat-hero-title { font-size: 44px; margin-top: 30px; }
+  .strict-chat-page .chat-hero-sub { font-size: 20px; line-height: 30px; }
+  .strict-chat-page .chat-welcome-art { width: 360px; }
+  .strict-chat-page .composer-hero { min-height: 200px; margin-top: 40px; }
+  .strict-chat-page .chat-input { font-size: 19px; }
+  .strict-chat-page .composer-attach-btn { height: 42px; font-size: 16px; }
+  .strict-chat-page .composer-bar > .composer-hint { font-size: 15px; }
+  .strict-chat-page .suggestions { margin-top: 36px; gap: 12px; }
+  .strict-chat-page .strict-chat-task { height: 100px; padding: 16px; gap: 14px; }
+  .strict-chat-page .suggestion-icon { width: 56px; height: 56px; flex-basis: 56px; }
+  .strict-chat-page .suggestion-title { font-size: 20px; }
+  .strict-chat-page .suggestion-text { font-size: 14px; }
+  .strict-chat-page .chat-mode-status { margin-top: 44px; font-size: 15px; }
+
+  .strict-skills-page .reference-banner-copy h1,
+  .gallery-page .reference-banner-copy h1 { font-size: 44px; }
+  .strict-skills-page .reference-banner-copy > p,
+  .gallery-page .reference-banner-copy p { font-size: 20px; }
+  .strict-skills-page .strict-skills-layout { grid-template-columns: 220px minmax(0, 1fr); gap: 12px; }
+  .strict-skills-page .strict-skills-layers { width: 220px; }
+  .strict-skills-page .strict-layer-copy strong { font-size: 19px; }
+  .strict-skills-page .strict-layer-copy > span { font-size: 12px; }
+  .strict-skills-page .strict-skill-card { height: 188px; min-height: 188px; padding: 16px; }
+  .strict-skills-page .strict-skill-icon { width: 48px; height: 48px; flex-basis: 48px; }
+  .strict-skills-page .strict-skill-heading strong { font-size: 20px; }
+  .strict-skills-page .strict-skill-heading > span,
+  .strict-skills-page .strict-skill-description { font-size: 14px; }
+  .strict-skills-page .strict-skill-status, .strict-skills-page .strict-skill-details { font-size: 13px; }
+  .gallery-page .library-filter-label { white-space: nowrap; font-size: 16px; }
+  .gallery-page .library-filter-row { gap: 12px; }
+  .gallery-page .library-filter-row .chip { min-width: 84px; height: 36px; padding: 0 16px; font-size: 16px; }
+  .gallery-page .gcard-name { font-size: 16px; }
+
+  .accounts-page .reference-banner-copy h1 { font-size: 38px; }
+  .accounts-page .reference-banner-copy p { font-size: 18px; }
+  .accounts-page .accounts-information { font-size: 16px; }
+  .accounts-page .account-card { min-height: 136px; gap: 16px; padding: 20px 18px; }
+  .accounts-page .account-platform-icon { width: 62px; height: auto; flex-basis: 62px; }
+  .accounts-page .account-card-name { font-size: 21px; }
+  .accounts-page .account-card-note { font-size: 14px; }
+  .accounts-page .account-card-actions { flex-basis: 135px; padding-left: 14px; }
+  .accounts-page .account-main-action { width: 120px; font-size: 16px; gap: 6px; padding: 0 8px; }
+  .my-profile-page .reference-banner-profile { min-height: 140px; }
+  .my-profile-page .reference-banner-art { width: 166px; flex-basis: 166px; }
+  .my-profile-page .reference-banner-copy h1 { font-size: 30px; }
+  .my-profile-page .reference-banner-copy p { font-size: 18px; }
+  .my-profile-page .reference-banner-actions .btn { min-width: 150px; height: 44px; padding: 8px 16px; font-size: 16px; }
+  .my-profile-row { grid-template-columns: minmax(300px, 33%) minmax(0, 1fr); }
+  .my-profile-label h2 { font-size: 21px; }
+  .my-profile-label p { font-size: 16px; }
+  .my-profile-excerpt, .my-profile-content.profile-content { font-size: 17px; }
+}
+
+@media (min-width: 901px) and (max-width: 1250px) {
+  .strict-chat-page .chat-hero-title { font-size: 40px; }
+  .strict-chat-page .chat-welcome-art { width: 340px; }
+  .strict-chat-page .chat-hero-brand { font-size: 15px; }
+}
+@media (min-width: 901px) and (max-width: 1100px) {
+  .my-hero h1 { font-size: 40px; line-height: 48px; }
+  .my-course-path { padding-left: 20px; padding-right: 20px; gap: 8px; }
+  .my-course-step { gap: 9px; }
+  .my-course-icon { width: 47px; }
+  .my-course-step p { font-size: 11px; }
+  .my-course-dots { flex-basis: 35px; }
+}
+
+/* UI/UX-reviewed short-screen budget: 1440×778, preserving the reference hierarchy. */
+@media (min-width: 1101px) and (max-height: 820px) {
+  :root { --sidebar-width: 200px; }
+  body { font-size: 14px; }
+  .strict-sidebar { width: 200px; min-width: 200px; }
+  .strict-sidebar .sidebar-header { padding: 10px 10px 14px; }
+  .strict-sidebar .sidebar-logo { height: 54px; margin-bottom: 12px; padding-left: 4px; }
+  .sidebar-reference-logo { width: 148px; }
+  .strict-sidebar .persona-select { height: 38px; font-size: 12px; padding-left: 36px; background-size: 26px; }
+  .strict-sidebar .sidebar-nav { padding: 6px 10px 0; }
+  .strict-sidebar .nav-item { height: 40px; min-height: 40px; padding: 0 14px; gap: 12px; font-size: 15px; }
+  .strict-sidebar .nav-icon, .strict-sidebar .nav-icon svg { width: 20px; height: 20px; }
+  .strict-sidebar .sidebar-section { padding: 0 16px; margin-top: 24px; }
+  .strict-sidebar .sidebar-section-title { font-size: 12px; }
+  .strict-sidebar .session-item { font-size: 13px; padding: 8px 6px; }
+  .sidebar-settings { font-size: 15px; margin: 0 16px; padding: 10px; }
+  .sidebar-settings svg { width: 20px; height: 20px; }
+  .sidebar-workspace-note { font-size: 13px; margin: 0 26px; gap: 12px; }
+  .workspace-topbar { height: 48px; min-height: 48px; padding: 0 18px 0 24px; }
+  .workspace-breadcrumb strong, .workspace-breadcrumb button { font-size: 14px; }
+  .workspace-utility { height: 30px; font-size: 13px; padding: 0 14px; border-radius: 10px; }
+  .workspace-utility svg { width: 18px; height: 18px; }
+  .workspace-avatar { width: 30px; height: 30px; }
+  .workspace-avatar svg { width: 21px; height: 21px; }
+  .btn { min-height: 34px; padding: 6px 12px; font-size: 14px; }
+  .mingya-dash { padding: 0 18px 24px; }
+  .my-hero { height: 248px; }
+  .my-hero .my-hero-art { width: 564.41px; height: 248px; }
+  .my-hero-copy { padding: 20px 28px; }
+  .my-eyebrow { font-size: 15px; line-height: 22px; }
+  .my-eyebrow .reference-gold-rule { height: 18px; width: 4px; }
+  .my-hero h1 { font-size: 38px; line-height: 44px; margin-top: 8px; }
+  .my-title-stroke { height: 4px; width: 140px; bottom: -3px; }
+  .my-hero-description { font-size: 14px; line-height: 21px; margin-top: 8px; max-width: 450px; }
+  .my-hero-actions { gap: 12px; margin-top: 18px; }
+  .my-hero-actions .btn { height: 38px; min-height: 38px; min-width: 140px; padding: 0 16px; font-size: 14px; gap: 8px; border-radius: 11px; }
+  .my-hero-actions .btn svg { width: 18px; height: 18px; }
+  .my-course-path { height: 70px; margin-top: 12px; padding: 10px 24px; gap: 12px; }
+  .my-course-icon { width: 44px; }
+  .my-course-step { gap: 14px; }
+  .my-course-step h2 { font-size: 16px; line-height: 22px; }
+  .my-course-step p { font-size: 12px; line-height: 18px; }
+  .my-course-dots { flex-basis: 60px; font-size: 14px; letter-spacing: 2px; }
+  .my-business-grid { margin-top: 12px; gap: 14px; }
+  .my-question-card, .my-space-card { height: 230px; padding: 11px 18px; }
+  .my-question-card h2, .my-space-card h2, .my-continue h2 { font-size: 18px; line-height: 26px; }
+  .mingya-dash .reference-section-mark { gap: 10px; }
+  .mingya-dash .reference-gold-rule { width: 4px; height: 18px; }
+  .my-question-caption { margin-top: 4px; font-size: 12px; line-height: 18px; }
+  .my-example-questions { margin-top: 8px; gap: 6px; }
+  .my-example-questions > button { min-height: 32px; padding: 4px 10px; gap: 12px; font-size: 13px; }
+  .my-question-number { width: 21px; height: 21px; font-size: 14px; border-radius: 6px; }
+  .my-topic-library { height: 28px; min-width: 120px; padding: 0 12px; margin-top: 8px; font-size: 13px; }
+  .my-space-stats { margin-top: 12px; }
+  .my-space-stats > button { font-size: 12px; line-height: 18px; }
+  .my-space-stats strong { font-size: 20px; line-height: 25px; }
+  .my-notebook-art { width: 160px; margin-top: 12px; }
+  .my-space-caption { font-size: 13px; line-height: 20px; margin-top: 4px; }
+  .my-continue { margin-top: 14px; }
+  .my-continue h2 { line-height: 28px; }
+  .my-continue-cards { gap: 14px; margin-top: 8px; }
+  .my-recent-content, .my-start-note { min-height: 64px; padding: 12px 18px; gap: 12px; font-size: 14px; }
+  .my-start-note > span { font-size: 14px; }
+  .my-start-note .btn { height: 34px; min-height: 34px; padding: 0 14px; font-size: 13px; }
+
+  .strict-chat-page .chat-hero { min-height: calc(100dvh - 48px); padding: 20px 30px 24px; }
+  .strict-chat-page .chat-workspace-label { font-size: 14px; line-height: 20px; }
+  .strict-chat-page .chat-hero-brand { height: 42px; margin-top: 16px; font-size: 14px; }
+  .strict-chat-page .chat-hero-brand strong { font-size: 18px; }
+  .strict-chat-page .chat-identity-logo { width: 28px; flex-basis: 28px; }
+  .strict-chat-page .chat-welcome-art { width: 322px; }
+  .strict-chat-page .chat-hero-title { margin-top: 22px; font-size: 38px; line-height: 1.3; }
+  .strict-chat-page .chat-hero-sub { margin-top: 8px; font-size: 18px; line-height: 26px; }
+  .strict-chat-page .composer { padding: 20px; border-radius: 18px; }
+  .strict-chat-page .composer-hero { min-height: 176px; margin-top: 28px; }
+  .strict-chat-page .chat-input { min-height: 64px; font-size: 16px; }
+  .strict-chat-page .composer-bar { min-height: 40px; margin-top: 8px; }
+  .strict-chat-page .composer-attach-btn { height: 38px; padding: 0 14px; font-size: 14px; }
+  .strict-chat-page .composer-bar > .composer-hint { font-size: 13px; }
+  .strict-chat-page .send-btn { width: 56px; height: 40px; border-radius: 11px; }
+  .strict-chat-page .suggestions { margin-top: 28px; gap: 12px; }
+  .strict-chat-page .strict-chat-task { height: 82px; padding: 14px; gap: 14px; }
+  .strict-chat-page .suggestion-icon { width: 44px; height: 44px; flex-basis: 44px; }
+  .strict-chat-page .suggestion-icon svg { width: 28px; height: 28px; }
+  .strict-chat-page .suggestion-title { font-size: 18px; line-height: 24px; }
+  .strict-chat-page .suggestion-text { font-size: 13px; line-height: 19px; }
+  .strict-chat-page .chat-mode-status { margin-top: 28px; font-size: 13px; }
+  .strict-chat-page .chat-more-tasks { margin-top: 14px; font-size: 13px; }
+
+  .strict-skills-page .reference-page-banner { height: 168px; min-height: 168px; margin-bottom: 18px; padding: 18px 30px; }
+  .strict-skills-page .reference-banner-copy h1, .gallery-page .reference-banner-copy h1 { font-size: 36px; }
+  .strict-skills-page .reference-banner-copy > p { margin-bottom: 12px; font-size: 18px; line-height: 26px; }
+  .strict-skills-page .reference-gold-rule { width: 5px; height: 30px; }
+  .strict-skills-page .reference-banner-art { width: 473.46px; height: 168px; }
+  .strict-skills-page .strict-skill-search-field, .strict-skills-page .strict-skill-search-submit { height: 40px; }
+  .strict-skills-page .strict-skill-search-field input, .strict-skills-page .strict-skill-search-submit { font-size: 16px; }
+  .strict-skills-page .strict-skills-layout { grid-template-columns: 244px minmax(0, 1fr); gap: 12px; }
+  .strict-skills-page .strict-skills-layers { width: 244px; min-height: 480px; padding: 12px 8px; gap: 12px; }
+  .strict-skills-page .strict-layer-item, .strict-skills-page .strict-layer-item.is-active { height: 62px; padding: 8px 10px; gap: 10px; }
+  .strict-skills-page .strict-layer-icon { flex-basis: 30px; }
+  .strict-skills-page .strict-layer-icon svg { width: 28px; height: 28px; }
+  .strict-skills-page .strict-layer-copy strong { font-size: 16px; line-height: 22px; }
+  .strict-skills-page .strict-layer-copy > span { font-size: 12px; line-height: 18px; }
+  .strict-skills-page .strict-skill-card { height: 160px; min-height: 160px; padding: 14px; }
+  .strict-skills-page .strict-skill-icon { width: 44px; height: 44px; flex-basis: 44px; }
+  .strict-skills-page .strict-skill-icon svg { width: 28px; height: 28px; }
+  .strict-skills-page .strict-skill-heading strong { font-size: 18px; line-height: 24px; }
+  .strict-skills-page .strict-skill-heading > span { font-size: 13px; line-height: 18px; }
+  .strict-skills-page .strict-skill-description { min-height: 36px; margin-top: 12px; font-size: 13px; line-height: 18px; }
+  .strict-skills-page .strict-skill-footer { min-height: 24px; }
+  .strict-skills-page .strict-skill-status, .strict-skills-page .strict-skill-details { min-height: 24px; font-size: 12px; line-height: 18px; }
+
+  .gallery-page .reference-banner-outputs { height: 142px; }
+  .gallery-page .reference-banner-copy { padding: 22px 30px; }
+  .gallery-page .reference-banner-copy p { font-size: 18px; }
+  .gallery-page .reference-gold-rule { width: 5px; height: 34px; }
+  .gallery-page .library-banner-art { width: 510px; height: 142px; }
+  .gallery-page .library-filters { padding: 18px 0; gap: 12px; }
+  .gallery-page .library-filter-row { min-height: 32px; gap: 12px; }
+  .gallery-page .library-filter-label { flex-basis: 72px; font-size: 14px; white-space: nowrap; }
+  .gallery-page .library-filter-row .chip { height: 32px; min-width: 78px; padding: 0 14px; gap: 8px; font-size: 14px; }
+  .gallery-page .gallery-grid { margin-top: 22px; gap: 16px; }
+  .gallery-page .gcard { min-height: 202px; padding: 8px; }
+  .gallery-page .gcard-thumb { height: 134px; }
+  .gallery-page .gcard-meta { min-height: 50px; padding-top: 8px; }
+  .gallery-page .gcard-name { font-size: 14px; }
+  .gallery-page .gcard-sub { font-size: 12px; }
+  .gallery-page .gcard-file-icon { flex-basis: 30px; width: 30px; height: 30px; }
+
+  .accounts-page .reference-banner-accounts { height: 112px; }
+  .accounts-page .reference-banner-copy { padding: 15px 28px; }
+  .accounts-page .reference-banner-copy h1 { font-size: 34px; }
+  .accounts-page .reference-banner-copy p { font-size: 16px; }
+  .accounts-page .reference-gold-rule { width: 5px; height: 34px; }
+  .accounts-page .accounts-banner-art { width: 653px; height: 112px; }
+  .accounts-page .reference-banner-actions { top: 37px; right: 26px; }
+  .accounts-page .accounts-refresh { min-width: 96px; min-height: 36px; font-size: 14px; }
+  .accounts-page .accounts-information { min-height: 40px; margin-top: 16px; padding: 7px 18px; gap: 14px; font-size: 14px; }
+  .accounts-page .accounts-information-icon { width: 20px; height: 20px; flex-basis: 20px; font-size: 14px; }
+  .accounts-page .accounts-grid { margin-top: 20px; gap: 12px; }
+  .accounts-page .account-card { min-height: 118px; padding: 16px 18px; gap: 18px; }
+  .accounts-page .account-platform-icon { width: 56px; height: auto; flex-basis: 56px; }
+  .accounts-page .account-card-name { font-size: 18px; }
+  .accounts-page .account-card-head { gap: 10px; margin-bottom: 8px; }
+  .accounts-page .account-card-head .badge { font-size: 12px; padding: 2px 10px; }
+  .accounts-page .account-card-note { font-size: 13px; }
+  .accounts-page .account-card-actions { flex-basis: 124px; min-height: 52px; padding-left: 14px; }
+  .accounts-page .account-main-action { width: 110px; min-height: 34px; font-size: 14px; }
+  .accounts-page .account-main-action svg { width: 18px; height: 18px; }
+
+  .my-profile-page .reference-banner-profile { min-height: 120px; margin-bottom: 14px; gap: 24px; padding-left: 18px; }
+  .my-profile-page .reference-banner-art { width: 150px; flex-basis: 150px; }
+  .my-profile-page .reference-banner-copy h1 { font-size: 27px; }
+  .my-profile-page .reference-banner-copy p { font-size: 15px; }
+  .my-profile-page .reference-banner-actions .btn { min-width: 132px; height: 38px; padding: 6px 12px; font-size: 14px; gap: 8px; }
+  .my-profile-page .reference-banner-actions .btn svg { width: 18px; height: 18px; }
+  .my-profile-dimensions { gap: 8px; }
+  .my-profile-row { min-height: 82px; padding: 10px 14px 10px 20px; grid-template-columns: minmax(300px, 33%) minmax(0, 1fr); }
+  .my-profile-row:nth-child(1) { min-height: 104px; }
+  .my-profile-row:nth-child(2) { min-height: 98px; }
+  .my-profile-row:nth-child(3) { min-height: 96px; }
+  .my-profile-row:nth-child(5), .my-profile-row:nth-child(6) { min-height: 82px; }
+  .my-profile-label { gap: 20px; }
+  .my-profile-dim-art, .my-profile-dim-fallback { width: 54px; height: 54px; flex-basis: 54px; }
+  .my-profile-label h2 { font-size: 18px; }
+  .my-profile-label p { font-size: 14px; margin-top: 5px; }
+  .my-profile-gold-rule { width: 4px; height: 20px; }
+  .my-profile-document { min-height: 56px; padding: 7px 42px 7px 18px; }
+  .my-profile-row:first-child .my-profile-document { min-height: 76px; }
+  .my-profile-excerpt, .my-profile-content.profile-content { font-size: 15px; }
+  .my-profile-pencil { right: 10px; top: 8px; width: 26px; height: 26px; }
+}
+
+@media (min-width: 1101px) and (max-height: 820px) {
+  .gallery-page .outputs-title-underline { width: 74px; height: 9px; border-top-width: 4px; bottom: -2px; }
+}

@@ -3,7 +3,14 @@ import { createSchedule, executeSkill, exportManualPackage, fetchOutputs, mediaU
 import type { OutputFile } from '../lib/api';
 import { loadPublishDraft, savePublishDraft } from '../lib/store';
 import { renderMarkdown } from '../lib/sanitize';
-import { IconCalendar, IconCheck, IconCopy, IconEdit, IconPublish, IconSkills, IconStop, IconTrash } from './icons';
+import { ReferenceArtwork } from './MingyaPrimitives';
+import '../styles/mingya-publish.css';
+import { IconCalendar, IconCheck, IconCopy, IconEdit, IconPublish, IconSkills, IconStop, IconTrash, IconImage, IconVideo } from './icons';
+
+const PLATFORM_ART: Record<string, readonly [number, number, number, number]> = {
+  xiaohongshu: [298,351,78,76], 'wechat-oa': [928,351,78,76], douyin: [298,522,78,76], 'weixin-channels': [928,522,80,76], bilibili: [298,691,78,76], zhihu: [928,691,80,76], kuaishou: [298,861,78,76],
+};
+const DISPLAY_ORDER = ['xiaohongshu','douyin','wechat-oa','weixin-channels','bilibili','zhihu','kuaishou'];
 
 const PLATFORMS = [
   { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, url: 'https://creator.xiaohongshu.com/publish/publish?source=official', hint: '在官方创作平台选择图文或视频，核对封面与话题。' },
@@ -35,6 +42,9 @@ export default function ManualPublishPage({ persona }: { persona: string }) {
   const [mediaFiles, setMediaFiles] = useState<OutputFile[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<string[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [previewPlatform, setPreviewPlatform] = useState('');
+  const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'all'>('all');
+
   const [editing, setEditing] = useState<string | null>(null);
   const [reviewed, setReviewed] = useState<Record<string, string>>({});
   const [links, setLinks] = useState<Record<string, string>>({});
@@ -67,6 +77,12 @@ export default function ManualPublishPage({ persona }: { persona: string }) {
   const approved = (key: string) => reviewed[key] === snapshot(key) && !adapting;
   const empty = !title.trim() && !body.trim() && !Object.values(overrides).some((text) => text.trim());
   const showToast = (text: string) => { setToast(text); window.setTimeout(() => setToast(''), 4000); };
+  const activePreview = platforms.includes(previewPlatform) ? previewPlatform : platforms[0] || '';
+  const activeMeta = PLATFORMS.find((platform) => platform.key === activePreview);
+  const activeText = activeMeta ? effective(activeMeta.key) : '';
+  const activeReady = !!activeMeta && approved(activeMeta.key) && !!(title.trim() || activeText.trim());
+  const reviewDisabled = !activeMeta || adapting || editing === activeMeta.key || !(title.trim() || activeText.trim());
+  const previewMedia = mediaFiles.find((file) => file.path === selectedMedia[0]);
   const toggle = (key: string) => setPlatforms((prev) => prev.includes(key) ? prev.filter((p) => p !== key) : [...prev, key]);
   const toggleMedia = (path: string) => setSelectedMedia((prev) => prev.includes(path) ? prev.filter((p) => p !== path) : [...prev, path]);
   const bodyWithTags = (key: string) => {
@@ -181,48 +197,36 @@ export default function ManualPublishPage({ persona }: { persona: string }) {
       <textarea id="manual-body" className="field" style={{ minHeight: 180 }} value={body} placeholder="输入文案，选择平台后让 AI 排版，也可以自行编辑。" onChange={(e) => setBody(e.target.value)} />
       <label className="field-label" htmlFor="manual-tags">话题标签（逗号分隔）</label>
       <input id="manual-tags" className="field" value={tags} placeholder="AI,职场,干货" onChange={(e) => setTags(e.target.value)} />
-      <label className="field-label">目标平台</label>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{PLATFORMS.map((p) => <button key={p.key} className={`chip ${platforms.includes(p.key) ? 'active' : ''}`} onClick={() => toggle(p.key)}>{p.label}</button>)}</div>
       <label className="field-label" style={{ marginTop: 16 }}>媒体素材 · 已选 {selectedMedia.length} 个</label>
       <p className="pv-hint">从内容库选择图片 / 视频打包导出，也可稍后在官方页面手动选择电脑上的文件。</p>
-      <button className="btn btn-sm" onClick={() => setShowPicker((v) => !v)}>{showPicker ? '收起素材' : '选择媒体'}</button>
+      <div className="mingya-media-choices"><button type="button" onClick={() => { setMediaKind('image'); setShowPicker((value) => mediaKind === 'image' ? !value : true); }}><IconImage size={25} /><strong>选择图片</strong><span>从内容库选择图片</span></button><button type="button" onClick={() => { setMediaKind('video'); setShowPicker((value) => mediaKind === 'video' ? !value : true); }}><IconVideo size={25} /><strong>选择视频</strong><span>从内容库选择视频</span></button></div>
       {selectedMedia.length > 0 && <ul style={{ fontSize: 12 }}>{selectedMedia.map((path) => <li key={path}><button className="pv-copy" onClick={() => toggleMedia(path)} title="移除素材">×</button> {path.split('/').pop()}</li>)}</ul>}
       {showPicker && <div className="media-grid">
         {!mediaFiles.length && <p className="dash-empty">内容库暂无图片或视频，可先导出文案。</p>}
-        {mediaFiles.slice(0, 80).map((f) => <button type="button" key={f.path} className={`media-cell ${selectedMedia.includes(f.path) ? 'sel' : ''}`} onClick={() => toggleMedia(f.path)} title={f.path}>
+        {mediaFiles.filter((file) => mediaKind === 'all' || file.kind === mediaKind).slice(0, 80).map((f) => <button type="button" key={f.path} className={`media-cell ${selectedMedia.includes(f.path) ? 'sel' : ''}`} onClick={() => toggleMedia(f.path)} title={f.path}>
           {f.kind === 'image' ? <img src={mediaUrl(f.path)} alt={f.name} loading="lazy" /> : <span className="media-vid">视频 · {f.name}</span>}
           {selectedMedia.includes(f.path) && <span className="media-check">✓</span>}
         </button>)}
       </div>}
-      <div className="publish-actions">
-        {adapting ? <button className="btn btn-sm" onClick={() => { ctl.current?.abort(); setAdapting(false); }}><IconStop size={13} /> 停止排版</button>
-          : <button className="btn btn-sm btn-primary" disabled={empty || !platforms.length} onClick={adapt}><IconSkills size={14} /> AI 排版 / 适配</button>}
-        <button className="btn btn-sm" disabled={empty || checking || adapting} onClick={check}><IconCheck size={14} />{checking ? '检查中…' : 'AI 辅助检查'}</button>
-        <button className="btn btn-sm" disabled={empty || saving || adapting} onClick={() => addToCalendar(platforms[0] || 'xiaohongshu')}><IconCalendar size={14} /> 存草稿并排期</button>
-        <button className="btn btn-sm btn-ghost" disabled={empty || adapting} onClick={() => { setTitle(''); setBody(''); setTags(''); setOverrides({}); setReviewed({}); setCheckResult(''); }}><IconTrash size={13} /> 清空文案</button>
-      </div>
       <p className="publish-saved-note">文案自动保存到当前浏览器。审核只针对当前版本；修改标题、正文、标签或素材后，需重新审核。AI 检查仅作参考。</p>
       {checkResult && <div className="panel"><div className="panel-title">AI 辅助检查</div><div className="skill-body-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(checkResult) }} /></div>}
     </div>
     <div className="publish-previews">
+<section className="mingya-publish-platforms"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />发布平台 <small>（可多选）</small></h2><div className="mingya-platform-options">{[...PLATFORMS].sort((a,b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key)).map((p) => <button key={p.key} type="button" className={`mingya-platform-option ${platforms.includes(p.key) ? 'selected' : ''}`} aria-pressed={platforms.includes(p.key)} onClick={() => toggle(p.key)}><ReferenceArtwork page="accounts" crop={PLATFORM_ART[p.key]} className="mingya-publish-platform-icon" /><span className="mingya-platform-name"><span className="mingya-checkbox" aria-hidden="true">{platforms.includes(p.key) ? '✓' : ''}</span>{p.key === 'wechat-oa' ? '微信公众号' : p.label}</span><span className="mingya-platform-status">人工审核</span></button>)}</div></section><div className="mingya-publish-right-body"><section className="mingya-publish-preview-section"><div className="mingya-preview-heading"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />预览</h2><label>切换平台：<select aria-label="切换预览平台" value={activePreview} disabled={!platforms.length} onChange={(event) => setPreviewPlatform(event.target.value)}>{!platforms.length && <option value="">未选择</option>}{PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label></div>
       {!platforms.length && <div className="dash-empty">选择目标平台，在这里预览和审核。</div>}
       {PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => {
         const text = effective(p.key);
         const ready = approved(p.key) && !!(title.trim() || text.trim());
         const isEdit = editing === p.key;
         const hasRecorded = recorded[p.key] === snapshot(p.key) + (links[p.key] || '');
-        return <div key={p.key} className={`card pv-card pv-${p.key}`}>
+        return <div key={p.key} hidden={p.key !== activePreview} className={`card pv-card pv-${p.key}`}>
           <div className="pv-head"><span className="pv-plat">{p.label}<span className={`pv-badge ${ready ? 'pv-badge-ok' : ''}`}>{ready ? '已人工审核' : '待人工审核'}</span></span><span className={`pv-count ${text.length > p.bodyLimit ? 'over' : ''}`}>{text.length} 字</span></div>
-          <div className="pv-body">
+          <div className="pv-body"><div className="mingya-publish-cover">{previewMedia ? (previewMedia.kind === 'image' ? <img src={mediaUrl(previewMedia.path)} alt={previewMedia.name} /> : <video src={mediaUrl(previewMedia.path)} controls preload="metadata" />) : <><IconImage size={44} /><span>暂无封面，发布后将展示所选配图</span></>}</div>
             <div className={`pv-title ${p.titleLimit && title.length > p.titleLimit ? 'over' : ''}`}>{title || <span className="pv-ph">标题预览</span>}</div>
             {isEdit ? <textarea className="field" aria-label={`${p.label}正文`} style={{ minHeight: 140 }} value={text} onChange={(e) => setOverrides((old) => ({ ...old, [p.key]: e.target.value }))} />
               : p.key === 'wechat-oa' ? <div className="skill-body-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(text) }} /> : <div className="pv-text">{text || '正文预览'}</div>}
             <p className="pv-hint" style={{ marginTop: 12 }}>{p.hint} 字数和格式以官方页面为准。</p>
             <button className="pv-copy" onClick={() => setEditing(isEdit ? null : p.key)}><IconEdit size={13} />{isEdit ? '完成编辑' : '编辑此平台版本'}</button>
-            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '16px 0', fontSize: 13 }}>
-              <input type="checkbox" aria-label={`${p.label}人工审核`} disabled={adapting || isEdit || !(title.trim() || text.trim())} checked={ready} onChange={(e) => setReviewed((old) => ({ ...old, [p.key]: e.target.checked ? snapshot(p.key) : '' }))} />
-              我已核对当前版本的事实、标题正文、话题、素材及使用授权，准备到官方页面发布。
-            </label>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               {(['title', 'body', 'all'] as const).map((part) => <button key={part} className="btn btn-sm" disabled={!ready} onClick={() => copyFor(p.key, part)}><IconCopy size={13} />{copied === `${p.key}:${part}` ? '已复制' : part === 'title' ? '复制标题' : part === 'body' ? '复制正文' : '复制全文'}</button>)}
               {p.key === 'wechat-oa' && <button className="btn btn-sm" disabled={!ready} onClick={copyRichText}>复制公众号排版</button>}
@@ -238,6 +242,33 @@ export default function ManualPublishPage({ persona }: { persona: string }) {
           </div>
         </div>;
       })}
+      </section><aside className="mingya-publish-settings">
+        <section className="mingya-publish-review">
+          <h2><span className="mingya-publish-section-rule" aria-hidden="true" />审核设置</h2>
+          <p>在预览中核对当前平台版本，确认审核后可复制、导出并前往官方页面提交。</p>
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 8, margin: '16px 0', fontSize: 13 }}>
+            <input
+              type="checkbox"
+              aria-label={activeMeta ? `${activeMeta.label}人工审核` : '人工审核'}
+              disabled={reviewDisabled}
+              checked={activeReady}
+              onChange={(event) => {
+                if (!activeMeta) return;
+                const key = activeMeta.key;
+                setReviewed((old) => ({ ...old, [key]: event.target.checked ? snapshot(key) : '' }));
+              }}
+            />
+            我已核对当前版本的事实、标题正文、话题、素材及使用授权，准备到官方页面发布。
+          </label>
+        </section>
+        <section className="mingya-publish-personalization"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />平台个性化设置</h2>{[...PLATFORMS].sort((a,b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key)).map((p) => <div key={p.key} className="mingya-personalization-row"><ReferenceArtwork page="accounts" crop={PLATFORM_ART[p.key]} className="mingya-personalization-icon" /><span>{p.key === 'wechat-oa' ? '微信公众号' : p.label}</span><button type="button" disabled={!platforms.includes(p.key)} onClick={() => { setPreviewPlatform(p.key); setEditing(p.key); }}>{platforms.includes(p.key) ? '单独设置 ›' : '先选平台'}</button></div>)}</section></aside></div>
+      <div className="publish-actions">
+        {adapting ? <button className="btn btn-sm" onClick={() => { ctl.current?.abort(); setAdapting(false); }}><IconStop size={13} /> 停止排版</button>
+          : <button className="btn btn-sm btn-primary" disabled={empty || !platforms.length} onClick={adapt}><IconSkills size={14} /> AI 排版 / 适配</button>}
+        <button className="btn btn-sm" disabled={empty || checking || adapting} onClick={check}><IconCheck size={14} />{checking ? '检查中…' : 'AI 辅助检查'}</button>
+        <button className="btn btn-sm" disabled={empty || saving || adapting} onClick={() => addToCalendar(platforms[0] || 'xiaohongshu')}><IconCalendar size={14} /> 存草稿并排期</button>
+        <button className="btn btn-sm btn-ghost" disabled={empty || adapting} onClick={() => { setTitle(''); setBody(''); setTags(''); setOverrides({}); setReviewed({}); setCheckResult(''); }}><IconTrash size={13} /> 清空文案</button>
+      </div>
     </div>
     {toast && <div className="toast" role="status">{toast}</div>}
   </div>;

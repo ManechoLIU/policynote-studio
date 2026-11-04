@@ -10,8 +10,8 @@ build/
 
 # Environment
 .env
-.env.local
-.env.xhs
+.env.*
+!.env.example
 # setup.sh 默认把 Python 依赖装进项目内的 .venv（见 setup.sh 的虚拟环境分支）
 .venv/
 
@@ -89,6 +89,9 @@ skills/builtin/video-production/vendor/**/models/
 skills/builtin/video-production/vendor/**/*large-v3*
 
 # Local workstation notes and personal business integration
+/AGENTS.md
+/DESIGN.md
+/TASK_LEDGER.md
 本机安装说明.md
 docs/xunhuan-AGENTS-before-20261101.md
 docs/xunhuan-workbench.md

@@ -1,0 +1,141 @@
+/* Approved home.png geometry. Artwork uses unmodified reference pixels. */
+.mingya-dash { padding: 0 22px 40px; color: var(--text); }
+.mingya-dash > * { max-width: 1600px; margin-left: auto; margin-right: auto; }
+.mingya-dash .reference-section-mark { display: inline-flex; align-items: center; gap: 14px; }
+.mingya-dash .reference-gold-rule { display: inline-block; width: 5px; height: 22px; border-radius: 3px; background: #ff940f; flex-shrink: 0; }
+.my-hero { position: relative; height: 348px; overflow: hidden; border-radius: 16px; background: linear-gradient(105deg, #fff9f1, #fff0df); }
+.my-hero .my-hero-art { position: absolute !important; right: 0; top: 0; width: 63.21%; height: 100%; }
+.my-hero-copy { position: relative; z-index: 1; padding: 29px 39px; pointer-events: none; }
+.my-eyebrow { color: #262a30; font-size: 20px; line-height: 30px; font-weight: 500; }
+.my-eyebrow .reference-section-mark { gap: 13px; }
+.my-hero h1 { color: #202327; margin-top: 13px; font-size: 52px; line-height: 60px; letter-spacing: 1px; font-weight: 800; }
+.my-title-line { position: relative; display: inline-block; }
+.my-title-stroke { position: absolute; height: 6px; width: 157px; bottom: -4px; right: 1px; background: #f89b2f; border-radius: 60% 40% 40% 60%; transform: rotate(-3deg); }
+.my-hero-description { color: #292b32; font-size: 17px; line-height: 28px; margin-top: 12px; }
+.my-hero-actions { display: flex; align-items: center; gap: 21px; margin-top: 32px; pointer-events: auto; width: fit-content; }
+.my-hero-actions .btn { height: 50px; min-width: 181px; justify-content: center; gap: 10px; padding: 0 22px; border-radius: 16px; font-size: 18px; font-weight: 500; }
+.my-hero-actions .btn-primary { background: #ff1640; border: 1px solid #ff1640; color: white; }
+.my-hero-actions .btn:not(.btn-primary) { background: #fff; border: 1px solid #c4c5ca; color: #202327; }
+.my-course-path { display: flex; align-items: center; justify-content: space-between; gap: 15px; height: 97px; margin-top: 17px; border: 1px solid var(--border); border-radius: 15px; padding: 18px 58px; background: var(--surface); }
+.my-course-step { display: flex; align-items: center; gap: 20px; flex-shrink: 0; }
+.my-course-icon { width: 60px; flex-shrink: 0; border-radius: 14px; }
+.my-course-step h2 { font-size: 21px; line-height: 29px; font-weight: 700; }
+.my-course-step p { color: var(--text-secondary); font-size: 15px; line-height: 24px; white-space: nowrap; }
+.my-course-dots { flex: 0 1 80px; color: #9299a8; overflow: hidden; letter-spacing: 4px; font-size: 18px; white-space: nowrap; }
+.my-business-grid { display: grid; grid-template-columns: minmax(0,674fr) minmax(0,563fr); gap: 16px; margin-top: 14px; }
+.my-question-card, .my-space-card { height: 316px; min-width: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 15px; padding: 15px 26px 18px; }
+.my-question-card h2, .my-space-card h2, .my-continue h2 { font-size: 23px; line-height: 34px; font-weight: 700; letter-spacing: -.5px; }
+.my-question-caption { margin-top: 7px; color: var(--text-secondary); font-size: 15px; line-height: 24px; }
+.my-example-questions { display: grid; gap: 8px; margin-top: 10px; }
+.my-example-questions > button { display: flex; align-items: center; gap: 18px; width: 100%; min-height: 46px; padding: 7px 13px; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; color: var(--text); text-align: left; font-size: 16px; cursor: pointer; }
+.my-question-number { display: grid; place-items: center; width: 24px; height: 25px; border-radius: 8px; background: #ffae45; color: white; flex-shrink: 0; font-size: 17px; }
+.my-example-questions > button > svg { margin-left: auto; flex-shrink: 0; color: var(--text-tertiary); }
+.my-example-questions > button:hover { border-color: #f3b766; background: var(--brand-gold-soft); }
+.my-topic-library { display: inline-flex; align-items: center; justify-content: center; height: 37px; min-width: 140px; gap: 9px; margin-top: 14px; padding: 0 16px; border: 1px solid #ff982b; border-radius: 9px; background: var(--surface); color: #e9831d; font-size: 16px; cursor: pointer; }
+.my-space-card { padding-left: 26px; padding-right: 14px; }
+.my-space-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 16px; }
+.my-space-stats > button { display: flex; align-items: center; flex-direction: column; gap: 0; border: 0; border-right: 1px solid var(--border-strong); background: transparent; color: var(--text); font-size: 14px; line-height: 24px; cursor: pointer; }
+.my-space-stats > button:last-child { border-right: 0; }
+.my-space-stats strong { font-size: 25px; line-height: 31px; font-weight: 650; }
+.my-space-stats > button:hover { color: var(--brand-gold); }
+.my-notebook-art { width: 224px; margin: 24px auto 0; }
+.my-space-caption { color: var(--text-secondary); text-align: center; font-size: 17px; line-height: 26px; margin-top: 5px; }
+.my-continue { margin-top: 19px; }
+.my-continue h2 { padding-left: 10px; line-height: 37px; }
+.my-continue-cards { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.13fr); gap: 16px; margin-top: 10px; }
+.my-recent-content, .my-start-note { display: flex; align-items: center; gap: 17px; min-height: 82px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); padding: 17px 27px; color: var(--text); font-size: 17px; text-align: left; }
+.my-recent-content { cursor: pointer; }
+.my-recent-content > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-recent-content > svg, .my-start-note > svg { color: #878b92; flex-shrink: 0; }
+.my-start-note { gap: 14px; padding-left: 31px; padding-right: 24px; }
+.my-start-note > span { flex: 1; font-size: 16px; }
+.my-start-note .btn { flex-shrink: 0; height: 40px; font-size: 16px; border-radius: 10px; padding: 0 19px; gap: 9px; }
+.my-toolbox { margin-top: 26px; padding: 22px 26px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); }
+.my-toolbox-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.my-toolbox-head h2 { font-size: 20px; }
+.my-toolbox-head > span { font-size: 12px; color: var(--text-secondary); }
+.mingya-dash .dash-quick { gap: 9px; margin-top: 16px; }
+.mingya-dash .dash-quick-btn { background: var(--surface); border-radius: 9px; font-size: 13px; }
+.mingya-dash .dash-quick-btn svg { color: var(--brand-gold); }
+.my-runtime-note { font-size: 11px; color: var(--text-tertiary); margin-top: 13px; }
+.mingya-dash .dash-grid { max-width: 1600px; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-top: 18px; }
+.mingya-dash .dash-card { min-width: 0; padding: 22px 26px; }
+.mingya-dash .dash-card-head { font-size: 16px; }
+.mingya-dash .dash-card-head svg { color: var(--brand-gold); }
+.mingya-dash .dash-empty { line-height: 1.9; padding: 14px 0; font-size: 13px; }
+:root[data-theme='dark'] .my-hero { background: #fff4e5; }
+:root[data-theme='dark'] .my-hero h1, :root[data-theme='dark'] .my-hero-description, :root[data-theme='dark'] .my-eyebrow { color: #24282e; }
+@media (max-width: 1350px) {
+  .my-course-path { padding-left: 30px; padding-right: 30px; gap: 12px; }
+  .my-course-step { gap: 12px; }
+  .my-course-step h2 { font-size: 19px; }
+  .my-course-step p { font-size: 13px; }
+  .my-course-dots { letter-spacing: 2px; }
+  .my-start-note { padding-left: 20px; padding-right: 20px; gap: 10px; }
+  .my-start-note > span { font-size: 14px; }
+  .my-start-note .btn { padding: 0 12px; font-size: 14px; }
+}
+@media (max-width: 1100px) {
+  .my-hero-copy { padding-left: 30px; }
+  .my-hero h1 { font-size: 43px; line-height: 54px; }
+  .my-hero-description { font-size: 14px; max-width: 390px; }
+  .my-hero-actions { gap: 12px; }
+  .my-hero-actions .btn { min-width: 151px; padding: 0 16px; font-size: 16px; }
+  .my-course-path { padding-left: 20px; padding-right: 20px; gap: 8px; }
+  .my-course-step { gap: 9px; }
+  .my-course-icon { width: 47px; }
+  .my-course-step p { font-size: 11px; }
+  .my-course-dots { flex-basis: 35px; }
+  .my-business-grid { grid-template-columns: minmax(0,1fr); }
+  .my-question-card, .my-space-card { height: 316px; }
+  .my-continue-cards { grid-template-columns: minmax(0,1fr); }
+}
+@media (max-width: 768px) {
+  .mingya-dash { padding: 0 16px 30px; }
+  .my-hero { height: auto; min-height: 540px; }
+  .my-hero .my-hero-art { top: auto; bottom: 0; width: 100%; height: auto; }
+  .my-hero-copy { padding: 27px 25px 255px; }
+  .my-eyebrow { font-size: 17px; }
+  .my-hero h1 { font-size: 40px; line-height: 51px; }
+  .my-hero-description { font-size: 13px; line-height: 23px; }
+  .my-hero-actions { margin-top: 21px; gap: 10px; }
+  .my-hero-actions .btn { min-width: 0; height: 44px; padding: 0 15px; font-size: 14px; border-radius: 12px; gap: 7px; }
+  .my-course-path { height: auto; display: grid; grid-template-columns: 1fr; gap: 16px; padding: 20px; }
+  .my-course-step { gap: 17px; }
+  .my-course-icon { width: 53px; }
+  .my-course-step h2 { font-size: 19px; }
+  .my-course-step p { font-size: 13px; }
+  .my-course-dots { display: none; }
+  .my-question-card, .my-space-card { padding-left: 18px; padding-right: 18px; }
+  .my-question-card h2, .my-space-card h2, .my-continue h2 { font-size: 20px; }
+  .my-question-caption { font-size: 13px; }
+  .my-example-questions > button { gap: 10px; font-size: 13px; padding-left: 9px; padding-right: 9px; }
+  .my-question-number { width: 22px; height: 23px; font-size: 15px; }
+  .my-space-stats > button { font-size: 12px; }
+  .my-continue-cards { gap: 12px; }
+  .my-recent-content, .my-start-note { padding: 18px; gap: 12px; font-size: 14px; }
+  .my-start-note { flex-wrap: wrap; }
+  .my-start-note > span { flex: 1; min-width: 190px; }
+  .my-start-note .btn { margin-left: 37px; }
+  .my-toolbox { padding: 20px 18px; }
+  .my-toolbox-head { align-items: flex-start; flex-direction: column; gap: 6px; }
+  .mingya-dash .dash-grid { grid-template-columns: minmax(0,1fr); }
+  .mingya-dash .dash-card-wide { grid-column: span 1; }
+}
+@media (max-width: 420px) {
+  .mingya-dash { padding-left: 12px; padding-right: 12px; }
+  .my-hero { min-height: 485px; }
+  .my-hero-copy { padding: 23px 20px 200px; }
+  .my-eyebrow { font-size: 15px; }
+  .my-hero h1 { font-size: 35px; line-height: 47px; letter-spacing: 0; }
+  .my-title-stroke { width: 130px; height: 5px; }
+  .my-hero-actions .btn { font-size: 13px; padding: 0 11px; }
+  .my-hero-actions .btn svg { width: 19px; }
+  .my-question-card { height: auto; min-height: 316px; padding-left: 13px; padding-right: 13px; }
+  .my-example-questions > button { min-height: 46px; font-size: 12px; gap: 8px; }
+  .my-space-card { padding-left: 13px; padding-right: 13px; }
+  .my-space-stats > button { font-size: 11px; }
+}
+
+/* Complete original banner replaces the previous illustration-only viewport. */
+.my-hero { background: #fff7ed; }

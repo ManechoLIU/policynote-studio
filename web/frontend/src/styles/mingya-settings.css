@@ -1,0 +1,161 @@
+/* Scoped derivative of the approved settings dialog. */
+.settings-overlay.mingya-settings-overlay { padding: 48px 18px 0; background: #1b202b66; color: #172030; }
+.mingya-settings-overlay .settings-panel { width: 1006px; height: 772px; max-width: 100%; max-height: calc(100dvh - 64px); border: 1px solid #e8eaf0; border-radius: 18px; background: #fdfdff; box-shadow: 0 22px 70px #1c243b26; animation: none; }
+.mingya-settings-overlay .settings-head { min-height: 76px; flex: 0 0 76px; padding: 16px 23px 16px 26px; gap: 16px; border-bottom: 1px solid #e6e9f1; }
+.mingya-settings-overlay .settings-title { display: flex; align-items: center; gap: 16px; font-size: 24px; line-height: 32px; color: #0e121b; }
+.mingya-settings-overlay .settings-title > svg { color: #ff8500; }
+.mingya-settings-overlay .settings-actions { gap: 16px; }
+.mingya-settings-overlay .settings-actions > .btn-primary { order: 2; }
+.mingya-settings-overlay .settings-actions > .btn:not(.btn-primary) { order: 1; }
+.mingya-settings-overlay .settings-actions > .settings-close { order: 3; }
+.mingya-settings-overlay .btn { min-height: 39px; padding: 7px 18px; border: 1px solid #c8cfdd; border-radius: 11px; background: #fff; color: #111822; box-shadow: none; font-size: 15px; line-height: 22px; font-weight: 500; gap: 8px; white-space: nowrap; }
+.mingya-settings-overlay .btn.btn-primary { border-color: #ff0739; background: #ff0739; color: #fff; }
+.mingya-settings-overlay .btn:disabled { opacity: .5; cursor: not-allowed; }
+.mingya-settings-overlay .settings-close { width: 29px; height: 36px; margin-left: 4px; border: 0; background: transparent; color: #111822; font-size: 19px; }
+.mingya-settings-overlay .settings-body { min-height: 0; }
+.mingya-settings-overlay .settings-nav { width: 174px; padding: 19px 10px; gap: 6px; border-right: 1px solid #e5e9f1; background: #f7f9fd; }
+.mingya-settings-overlay .settings-nav .snav { min-height: 48px; padding: 10px 15px; gap: 11px; border-radius: 11px; font-size: 18px; line-height: 26px; color: #151c29; }
+.mingya-settings-overlay .settings-nav .snav.active { color: #ff7900; background: #fff0e3; }
+.mingya-settings-overlay .settings-nav .snav svg { width: 23px; height: 23px; }
+.mingya-settings-overlay .settings-nav .snav small { display: none; }
+.mingya-settings-overlay .settings-main { padding: 0 20px 22px; overflow: auto; scrollbar-gutter: stable; }
+.mingya-settings-overlay .tabbar { position: sticky; z-index: 3; top: 0; height: 62px; margin: 0 -20px 20px; padding: 0 22px; gap: 20px; align-items: stretch; overflow-x: auto; background: #fdfdff; border-bottom: 1px solid #e7eaf2; }
+.mingya-settings-overlay .tab { position: relative; flex-shrink: 0; margin: 0; padding: 15px 6px 11px; border-bottom-width: 3px; border-radius: 0; font-size: 17px; line-height: 28px; color: #151b28; }
+.mingya-settings-overlay .tab.active { border-bottom-color: #ff8a00; color: #101621; font-weight: 700; }
+.mingya-settings-overlay .st-sec, .mingya-settings-overlay .st-panel { animation: none; }
+.mingya-settings-overlay .settings-section-title { display: flex; align-items: center; gap: 11px; font-size: 20px; line-height: 28px; font-weight: 700; color: #111721; }
+.mingya-settings-overlay .settings-title-mark { display: inline-block; flex: 0 0 5px; width: 5px; height: 20px; border-radius: 3px; background: #ff8900; }
+.mingya-settings-overlay .desc, .mingya-settings-overlay .foot-note { color: #515c70; font-size: 14px; line-height: 1.65; }
+.mingya-settings-overlay .harness-heading > .desc { margin: 3px 0 0 15px; }
+.mingya-settings-overlay .harness-settings { padding-bottom: 19px; margin-bottom: 17px; border-bottom: 1px solid #e4e9f2; }
+.mingya-settings-overlay .settings-field { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 12px; padding: 20px 7px 0; border-bottom: 0; }
+.mingya-settings-overlay .settings-field-label { padding-top: 9px; color: #1c2639; font-size: 15px; }
+.mingya-settings-overlay .settings-field-body { max-width: none; }
+.mingya-settings-overlay .settings-engine-control { position: relative; display: flex; align-items: center; gap: 10px; }
+.mingya-settings-overlay .settings-engine-control .settings-select-wrap { flex: 1; min-width: 100px; }
+.mingya-settings-overlay .settings-engine-control .settings-help { position: absolute; left: -92px; top: 70px; z-index: 2; }
+.mingya-settings-overlay .settings-engine-control .settings-help-trigger { color: #ff8700; }
+.mingya-settings-overlay .settings-help-tooltip { top: 28px; right: auto; left: 0; font-size: 13px; }
+.mingya-settings-overlay .settings-engine-actions { display: flex; gap: 11px; flex-shrink: 0; }
+.mingya-settings-overlay .settings-select, .mingya-settings-overlay .proto-trigger { min-height: 39px; border: 1px solid #c7cedc; border-radius: 10px; padding: 7px 14px; background: #fff; font-size: 15px; color: #162031; }
+.mingya-settings-overlay .harness-mode-information { display: flex; gap: 12px; margin: 16px 0 0 -108px; padding: 12px 17px 12px 51px; border: 1px solid #e3e8f1; border-radius: 12px; background: #f6f8fc; }
+.mingya-settings-overlay .harness-info-icon { display: none; }
+.mingya-settings-overlay .harness-mode-information strong { font-size: 15px; line-height: 24px; color: #192333; }
+.mingya-settings-overlay .harness-mode-information p.desc { margin-top: 3px; font-size: 14px; line-height: 1.6; }
+.mingya-settings-overlay .harness-mode-information p.desc + p.desc { margin-top: 5px; }
+.mingya-settings-overlay .panel-top { flex-wrap: wrap; gap: 10px; margin-bottom: 8px; }
+.mingya-settings-overlay .model-connection-description { margin: 0 0 16px; color: #505b6f; font-size: 14px; line-height: 1.6; }
+.mingya-settings-overlay .board { border: 1px solid #dfe5ef; border-radius: 10px; background: #fff; overflow-x: auto; box-shadow: none; }
+.mingya-settings-overlay .prow { grid-template-columns: 40px 88px 76px 170px 168px 132px 52px 90px 40px; min-width: 990px; gap: 9px; padding: 10px; font-size: 14px; border-color: #e7ebf3; }
+.mingya-settings-overlay .prow.head { min-height: 41px; padding: 10px; font-size: 13px; color: #1d2636; background: #f5f7fb; }
+.mingya-settings-overlay .step { width: 36px; height: 31px; border: 1px solid #d1d9e6; border-radius: 5px; background: #fff; color: #34415a; font-size: 13px; font-weight: 500; }
+.mingya-settings-overlay .pname { font-size: 13px; color: #1e293c; overflow-wrap: anywhere; }
+.mingya-settings-overlay .pname small { font-size: 12px; }
+.mingya-settings-overlay input.mock, .mingya-settings-overlay .pname input.mock { min-height: 32px; padding: 5px 8px; font-size: 13px; border: 1px solid #cfd6e3; border-radius: 6px; background: #fff; color: #162133; }
+.mingya-settings-overlay .model-cell { flex-wrap: wrap; }
+.mingya-settings-overlay .model-cell input.mock { flex: 1 1 100px; }
+.mingya-settings-overlay .model-cell .fetch-btn { font-size: 12px; min-height: 25px; border-color: #d8dfeb; }
+.mingya-settings-overlay .thinking-controls { font-size: 12px; line-height: 20px; }
+.mingya-settings-overlay .thinking-controls select { font-size: 12px; }
+.mingya-settings-overlay .prow .proto-trigger { min-height: 32px; padding: 5px 8px; font-size: 13px; border-radius: 6px; }
+.mingya-settings-overlay .cell-text, .mingya-settings-overlay .stt { font-size: 13px; }
+.mingya-settings-overlay .tag { font-size: 13px; padding: 5px 10px; }
+.mingya-settings-overlay .pill { font-size: 13px; line-height: 22px; }
+.mingya-settings-overlay .settings-foot { flex-shrink: 0; padding: 10px 20px; color: #677187; border-color: #e6eaf3; background: #f8faff; font-size: 12px; line-height: 1.5; }
+.mingya-settings-overlay .save-note { margin: 12px 0; padding: 10px 13px; font-size: 14px; }
+.mingya-settings-overlay .env-error { font-size: 14px; }
+.mingya-settings-overlay .grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.mingya-settings-overlay .st-env .card-name { font-size: 14px; }
+.mingya-settings-overlay .st-env .card-desc { font-size: 13px; }
+.mingya-settings-overlay .st-env .card-foot .btn { min-height: 30px; font-size: 13px; }
+.mingya-settings-overlay .local-agents { overflow-x: auto; }
+.mingya-settings-overlay .la-row { min-width: 690px; }
+.model-dd.mingya-settings-dropdown { z-index: 130; border: 1px solid #d8dfeb; border-radius: 10px; background: #fff; color: #172032; box-shadow: 0 12px 32px #25354a26; font-size: 14px; }
+.model-dd.mingya-settings-dropdown .dd-item { min-height: 34px; padding: 8px 12px; font-size: 14px; }
+.model-dd.mingya-settings-dropdown .dd-item.active { background: #fff1e4; color: #dc6c00; }
+@media (max-width: 1450px), (max-height: 850px) {
+  .settings-overlay.mingya-settings-overlay { padding: 0 18px; }
+  .mingya-settings-overlay .settings-panel { width: 1040px; height: 690px; max-height: calc(100dvh - 48px); }
+  .mingya-settings-overlay .settings-head { min-height: 58px; flex-basis: 58px; padding: 10px 20px; }
+  .mingya-settings-overlay .settings-title { font-size: 22px; line-height: 29px; gap: 12px; }
+  .mingya-settings-overlay .settings-title > svg { width: 25px; height: 25px; }
+  .mingya-settings-overlay .settings-actions { gap: 12px; }
+  .mingya-settings-overlay .btn { min-height: 34px; padding: 5px 14px; border-radius: 9px; font-size: 14px; line-height: 22px; }
+  .mingya-settings-overlay .settings-nav { width: 152px; padding: 14px 8px; }
+  .mingya-settings-overlay .settings-nav .snav { min-height: 43px; padding: 9px 11px; gap: 9px; font-size: 16px; line-height: 24px; }
+  .mingya-settings-overlay .settings-nav .snav svg { width: 21px; height: 21px; }
+  .mingya-settings-overlay .settings-main { padding: 0 18px 18px; }
+  .mingya-settings-overlay .tabbar { height: 43px; margin: 0 -18px 16px; padding: 0 18px; gap: 24px; }
+  .mingya-settings-overlay .tab { padding: 7px 5px; font-size: 15px; line-height: 26px; }
+  .mingya-settings-overlay .settings-section-title { font-size: 18px; line-height: 25px; }
+  .mingya-settings-overlay .desc, .mingya-settings-overlay .foot-note, .mingya-settings-overlay .model-connection-description { font-size: 13px; }
+  .mingya-settings-overlay .settings-field { padding-top: 16px; }
+  .mingya-settings-overlay .settings-field-label { font-size: 14px; padding-top: 6px; }
+  .mingya-settings-overlay .settings-select { min-height: 34px; padding: 5px 12px; font-size: 14px; }
+  .mingya-settings-overlay .harness-mode-information { margin-top: 14px; padding-top: 10px; padding-bottom: 10px; }
+  .mingya-settings-overlay .harness-mode-information p.desc { font-size: 13px; }
+  .mingya-settings-overlay .harness-settings { padding-bottom: 15px; margin-bottom: 15px; }
+  .mingya-settings-overlay .settings-engine-control .settings-help { top: 61px; }
+}
+@media (max-width: 760px) {
+  .settings-overlay.mingya-settings-overlay { padding: 12px; }
+  .mingya-settings-overlay .settings-panel { height: calc(100dvh - 24px); max-height: none; }
+  .mingya-settings-overlay .settings-head { flex-wrap: wrap; flex-basis: auto; min-height: 58px; gap: 10px; padding: 12px; }
+  .mingya-settings-overlay .settings-title { font-size: 20px; }
+  .mingya-settings-overlay .settings-actions { gap: 8px; }
+  .mingya-settings-overlay .settings-actions .btn { padding: 5px 10px; font-size: 13px; }
+  .mingya-settings-overlay .settings-body { flex-direction: column; }
+  .mingya-settings-overlay .settings-nav { width: 100%; flex-direction: row; overflow-x: auto; padding: 7px; border-right: 0; border-bottom: 1px solid #e5e9f1; }
+  .mingya-settings-overlay .settings-nav .snav { flex-shrink: 0; font-size: 14px; padding: 7px 9px; }
+  .mingya-settings-overlay .settings-main { overflow-x: hidden; padding: 0 12px 18px; }
+  .mingya-settings-overlay .tabbar { margin-left: -12px; margin-right: -12px; padding: 0 12px; gap: 16px; }
+  .mingya-settings-overlay .settings-field { grid-template-columns: 1fr; padding-left: 0; padding-right: 0; gap: 7px; }
+  .mingya-settings-overlay .settings-engine-control { flex-wrap: wrap; }
+  .mingya-settings-overlay .settings-engine-control .settings-select-wrap { flex: 1 1 100%; }
+  .mingya-settings-overlay .settings-engine-actions { flex-wrap: wrap; }
+  .mingya-settings-overlay .harness-mode-information { margin-left: 0; padding-left: 14px; }
+  .mingya-settings-overlay .settings-engine-control .settings-help { position: relative; left: auto; top: auto; }
+  .mingya-settings-overlay .settings-help-tooltip { left: auto; right: 0; }
+  .mingya-settings-overlay .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mingya-settings-overlay .settings-foot { padding: 8px 12px; font-size: 11px; }
+}
+/* Dark theme only. Light rules above stay the baseline. */
+:root[data-theme='dark'] .settings-overlay.mingya-settings-overlay { color: var(--text); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-panel { border-color: var(--border); background: var(--surface); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-head { border-bottom-color: var(--border); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-title,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-close,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-section-title,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-field-label,
+:root[data-theme='dark'] .mingya-settings-overlay .tab.active { color: var(--text); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-title > svg,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-title-mark,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-engine-control .settings-help-trigger { color: var(--brand-gold); background: transparent; }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-title-mark { background: var(--brand-gold); }
+:root[data-theme='dark'] .mingya-settings-overlay .btn:not(.btn-primary) { border-color: var(--border-strong); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-nav { border-color: var(--border); background: var(--surface-2); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-nav .snav,
+:root[data-theme='dark'] .mingya-settings-overlay .tab { color: var(--text-secondary); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-nav .snav.active { color: var(--brand-gold); background: var(--brand-gold-soft); }
+:root[data-theme='dark'] .mingya-settings-overlay .tabbar { background: var(--surface); border-bottom-color: var(--border); }
+:root[data-theme='dark'] .mingya-settings-overlay .tab.active { border-bottom-color: var(--brand-gold); }
+:root[data-theme='dark'] .mingya-settings-overlay .desc,
+:root[data-theme='dark'] .mingya-settings-overlay .foot-note,
+:root[data-theme='dark'] .mingya-settings-overlay .model-connection-description,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-foot { color: var(--text-secondary); }
+:root[data-theme='dark'] .mingya-settings-overlay .harness-settings,
+:root[data-theme='dark'] .mingya-settings-overlay .prow { border-color: var(--border); }
+:root[data-theme='dark'] .mingya-settings-overlay .settings-select,
+:root[data-theme='dark'] .mingya-settings-overlay .proto-trigger,
+:root[data-theme='dark'] .mingya-settings-overlay .board,
+:root[data-theme='dark'] .mingya-settings-overlay .step,
+:root[data-theme='dark'] .mingya-settings-overlay input.mock,
+:root[data-theme='dark'] .mingya-settings-overlay .pname input.mock { border-color: var(--border-strong); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .mingya-settings-overlay .harness-mode-information { border-color: var(--border); background: var(--surface-2); }
+:root[data-theme='dark'] .mingya-settings-overlay .harness-mode-information strong,
+:root[data-theme='dark'] .mingya-settings-overlay .pname { color: var(--text); }
+:root[data-theme='dark'] .mingya-settings-overlay .prow.head,
+:root[data-theme='dark'] .mingya-settings-overlay .settings-foot { color: var(--text-secondary); background: var(--surface-2); border-color: var(--border); }
+:root[data-theme='dark'] .mingya-settings-overlay .model-cell .fetch-btn { border-color: var(--border); }
+:root[data-theme='dark'] .model-dd.mingya-settings-dropdown { border-color: var(--border); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .model-dd.mingya-settings-dropdown .dd-item.active { background: var(--brand-gold-soft); color: var(--brand-gold); }

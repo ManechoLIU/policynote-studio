@@ -9,6 +9,7 @@ Provider（--provider 或 env VIDEO_PROVIDER）：
   ark                火山引擎 ARK（Seedance）。env ARK_API_KEY
   kling              快手可灵。env KLING_ACCESS_KEY / KLING_SECRET_KEY（JWT 鉴权）
   openai-compatible  通用 /videos 端点。env VIDEO_API_KEY / VIDEO_BASE_URL / VIDEO_MODEL
+  real-api           Real-API /videos/generations/jobs；支持任务恢复查询。
   xhs-maas           小红书内网 MaaS（happyhorse 文/图生视频）。env XHS_MAAS_API_KEY
                      （可选 XHS_MAAS_VIDEO_BASE / XHS_MAAS_T2V_MODEL / XHS_MAAS_I2V_MODEL /
                      XHS_MAAS_RESOLUTION）。DashScope 风格异步 + api-key 头，内网直连（绕代理）。
@@ -154,6 +155,7 @@ PROVIDER_CAPABILITIES: dict[str, dict[str, Any]] = {
     "ark": {"native_audio": True, "dialogue": True, "dialogue_faithful": False, "audio_reference": False,
             "audio_field": "generate_audio", "audio_location": "root"},
     "kling": {"native_audio": False, "dialogue": False, "dialogue_faithful": False, "audio_reference": False},
+    "real-api": {"native_audio": False, "dialogue": False, "dialogue_faithful": False, "audio_reference": False},
     "openai-compatible": {"native_audio": False, "dialogue": False, "dialogue_faithful": False, "audio_reference": False},
     "xhs-maas": {"native_audio": True, "dialogue": True, "dialogue_faithful": False, "audio_reference": False,
                  "audio_default": True},
@@ -293,6 +295,7 @@ def resolve_model(provider: str, explicit: str | None = None, *, image: bool = F
         "dashscope": ("DASHSCOPE_VIDEO_MODEL",),
         "ark": ("ARK_MODEL",),
         "openai-compatible": ("VIDEO_MODEL",),
+        "real-api": ("REAL_API_VIDEO_MODEL",),
         "xhs-maas": (("XHS_MAAS_I2V_MODEL",) if image else ("XHS_MAAS_T2V_MODEL",)),
         "agnes": ("AGNES_MODEL",),
     }.get(provider, ())
@@ -304,6 +307,7 @@ def resolve_model(provider: str, explicit: str | None = None, *, image: bool = F
         "dashscope": DEFAULT_DASHSCOPE_MODEL,
         "ark": DEFAULT_ARK_MODEL,
         "openai-compatible": "sora-1",
+        "real-api": "wan3.0-video",
         "xhs-maas": "happyhorse-1.0-i2v" if image else "happyhorse-1.0-t2v",
         "agnes": DEFAULT_AGNES_MODEL,
     }
@@ -314,7 +318,7 @@ def resolve_model(provider: str, explicit: str | None = None, *, image: bool = F
 
 def http_request(url: str, headers: dict[str, str], method: str = "GET",
                  payload: dict[str, Any] | None = None, timeout: int = 60,
-                 direct: bool = False) -> dict[str, Any]:
+                 direct: bool = False, opener=None) -> dict[str, Any]:
     base_headers = {"User-Agent": UA}
     base_headers.update(headers)
     data = None
@@ -322,7 +326,7 @@ def http_request(url: str, headers: dict[str, str], method: str = "GET",
         data = json.dumps(payload).encode("utf-8")
         base_headers.setdefault("Content-Type", "application/json")
     req = urllib.request.Request(url, data=data, headers=base_headers, method=method)
-    open_fn = _NO_PROXY_OPENER.open if direct else urllib.request.urlopen
+    open_fn = opener.open if opener is not None else (_NO_PROXY_OPENER.open if direct else urllib.request.urlopen)
     try:
         with open_fn(req, timeout=timeout) as resp:
             raw = resp.read().decode("utf-8")
@@ -398,13 +402,14 @@ def _poll(task_url: str, headers: dict[str, str], interval: int, timeout: int,
           status_path: tuple[str, ...] = ("output", "task_status"),
           done=("SUCCEEDED", "SUCCESS", "COMPLETED"),
           bad=("FAILED", "CANCELED", "ERROR", "UNKNOWN"),
-          payload: dict[str, Any] | None = None, direct: bool = False) -> dict[str, Any]:
+          payload: dict[str, Any] | None = None, direct: bool = False, opener=None) -> dict[str, Any]:
     start = time.time()
     while True:
         elapsed = time.time() - start
         if elapsed > timeout:
             fail(f"任务超时（{timeout}s），可稍后用 task_id 手动查询。")
-        result = http_request(task_url, headers, method="GET", payload=payload, direct=direct)
+        options = {"opener": opener} if opener is not None else {}
+        result = http_request(task_url, headers, method="GET", payload=payload, direct=direct, **options)
         node: Any = result
         for k in status_path:
             node = node.get(k, {}) if isinstance(node, dict) else {}
@@ -560,6 +565,86 @@ def generate_openai_compatible(args: argparse.Namespace, image: str | None) -> P
     return download_video(url, Path(args.output))
 
 
+# Real-API uses its own job API, not the OpenAI /videos schema.
+def _real_api_opener():
+    class NoRedirect(urllib.request.HTTPRedirectHandler):
+        def redirect_request(self, *args, **kwargs):
+            return None
+    return urllib.request.build_opener(NoRedirect)
+
+
+def _real_api_connection() -> tuple[str, dict[str, str]]:
+    base = require_env("REAL_API_BASE_URL").rstrip("/")
+    return base + "/videos/generations/jobs", {"Authorization": "Bearer " + require_env("REAL_API_KEY")}
+
+
+def _wait_real_api(args: argparse.Namespace, job_id: int, endpoint: str,
+                   headers: dict[str, str]) -> Path:
+    print(f"任务 {job_id}：仅恢复查询请用 resume-real-api --job-id {job_id}，不要重新提交。", file=sys.stderr)
+    task = _poll(f"{endpoint}/{job_id}", headers, args.poll_interval, args.timeout,
+                 status_path=("status",), opener=_real_api_opener())
+    url = _find_video_url(task.get("data"))
+    if not url:
+        fail("任务完成但无视频 URL；请核对已有任务，不要重新生成。")
+    return download_video(url, Path(args.output))
+
+
+def generate_real_api(args: argparse.Namespace, image: str | None) -> Path:
+    model = resolve_model("real-api", args.model, image=image is not None)
+    if model != "wan3.0-video":
+        fail("此适配器目前仅接入 wan3.0-video。")
+    duration = args.duration if args.duration is not None else 5
+    resolution = (os.environ.get("REAL_API_VIDEO_RESOLUTION") or "720P").upper()
+    if not 2 <= duration <= 30 or args.ratio not in ("16:9", "9:16", "1:1", "4:3", "3:4"):
+        fail("Real-API 视频须指定有效画幅，时长为 2–30 秒。")
+    if resolution not in ("480P", "720P", "1080P"):
+        fail("Real-API 分辨率须为 480P、720P 或 1080P。")
+    if image and not image.startswith("https://"):
+        fail("Real-API 首帧仅支持公网 HTTPS 图片 URL，本地图片上传尚未接入。")
+    payload = {"model": model, "prompt": args.prompt or "", "duration": duration,
+               "size": args.ratio, "resolution": resolution}
+    if image:
+        payload.update(image_urls=[image], generation_type="frame")
+    _put_audio(payload, None, args, "real-api", model)
+    endpoint, headers = _real_api_connection()
+    receipt = Path(args.output + ".job.json")
+    receipt.parent.mkdir(parents=True, exist_ok=True)
+    record = {"provider": "real-api", "model": model, "endpoint": endpoint, "status": "unknown"}
+    try:
+        with receipt.open("x", encoding="utf-8") as stream:
+            json.dump(record, stream)
+    except FileExistsError:
+        fail("已有任务收据；请恢复查询。结果未知时先查控制台，勿重复提交。")
+    try:
+        # No redirects: a credential must stay at the configured service.
+        result = http_request(endpoint, headers, method="POST", payload=payload, opener=_real_api_opener())
+    except (SystemExit, Exception):
+        fail("提交结果未知；保留收据，请核对控制台，勿自动重试。")
+    job_id = result.get("job_id")
+    if isinstance(job_id, bool) or not str(job_id).isdigit() or int(job_id) < 1:
+        fail("提交响应缺有效 job_id；结果未知，请核对控制台，勿重新提交。")
+    record.update(job_id=int(job_id), status=result.get("status", "pending"))
+    temporary = receipt.with_suffix(receipt.suffix + ".tmp")
+    try:
+        temporary.write_text(json.dumps(record), encoding="utf-8")
+        temporary.replace(receipt)
+    except OSError:
+        fail(f"任务已提交，job_id={job_id}，但收据更新失败；请保存任务 ID 并核对控制台，勿重新提交。")
+    return _wait_real_api(args, int(job_id), endpoint, headers)
+
+
+def cmd_resume_real_api(args: argparse.Namespace) -> int:
+    endpoint, headers = _real_api_connection()
+    try:
+        record = json.loads(Path(args.output + ".job.json").read_text())
+        if args.job_id < 1 or record.get("endpoint") != endpoint or record.get("job_id") != args.job_id:
+            raise ValueError
+    except (OSError, ValueError):
+        fail("已有任务收据与 job_id / 当前端点不匹配；未发请求。")
+    print(_wait_real_api(args, args.job_id, endpoint, headers))
+    return 0
+
+
 # ── provider: xhs-maas（小红书内网 happyhorse 文/图生视频）─────
 def generate_xhs_maas(args: argparse.Namespace, image: str | None) -> Path:
     """小红书内网 MaaS：DashScope 风格异步，鉴权 api-key 头，全程直连（绕代理）。
@@ -649,6 +734,7 @@ GENERATORS = {
     "ark": generate_ark,
     "kling": generate_kling,
     "openai-compatible": generate_openai_compatible,
+    "real-api": generate_real_api,
     "xhs-maas": generate_xhs_maas,
     "agnes": generate_agnes,
 }
@@ -854,6 +940,14 @@ def main() -> int:
     p5.add_argument("--asr-model", dest="asr_model", default="base", help="faster-whisper 模型（默认 base）")
     p5.add_argument("--threshold", type=float, default=0.9, help="逐字忠实相似度阈值（默认 0.9）")
     p5.set_defaults(func=cmd_probe_dialogue)
+
+    p6 = sub.add_parser("resume-real-api", help="仅查询已有 Real-API 任务，不重新生成")
+    p6.add_argument("--env-file")
+    p6.add_argument("--job-id", type=int, required=True)
+    p6.add_argument("-o", "--output", required=True)
+    p6.add_argument("--poll-interval", type=int, default=10)
+    p6.add_argument("--timeout", type=int, default=900)
+    p6.set_defaults(func=cmd_resume_real_api)
 
     args = ap.parse_args()
     env_file = Path(args.env_file) if getattr(args, "env_file", None) else find_default_env_file()

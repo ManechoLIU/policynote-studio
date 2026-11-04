@@ -1,0 +1,188 @@
+[
+  {
+    "cleared_source_rectangles" : [
+      [
+        300,
+        89,
+        250,
+        40
+      ],
+      [
+        300,
+        132,
+        416,
+        139
+      ],
+      [
+        300,
+        273,
+        443,
+        35
+      ],
+      [
+        299,
+        319,
+        407,
+        67
+      ]
+    ],
+    "crop" : [
+      269,
+      64,
+      1253,
+      348
+    ],
+    "left_edge_alpha_feather" : 80,
+    "page" : "home",
+    "source" : "design-references\/home.png",
+    "unchanged_artwork_pixels_checked" : 260260
+  },
+  {
+    "cleared_source_rectangles" : [
+      [
+        298,
+        88,
+        445,
+        100
+      ],
+      [
+        299,
+        198,
+        568,
+        63
+      ]
+    ],
+    "crop" : [
+      269,
+      64,
+      1253,
+      220
+    ],
+    "left_edge_alpha_feather" : 80,
+    "page" : "skills",
+    "source" : "design-references\/skills.png",
+    "unchanged_artwork_pixels_checked" : 136960
+  },
+  {
+    "cleared_source_rectangles" : [
+      [
+        300,
+        90,
+        440,
+        118
+      ]
+    ],
+    "crop" : [
+      269,
+      64,
+      1253,
+      185
+    ],
+    "left_edge_alpha_feather" : 80,
+    "page" : "outputs",
+    "source" : "design-references\/outputs.png",
+    "unchanged_artwork_pixels_checked" : 113520
+  },
+  {
+    "cleared_source_rectangles" : [
+      [
+        300,
+        87,
+        448,
+        101
+      ],
+      [
+        1366,
+        105,
+        135,
+        62
+      ]
+    ],
+    "crop" : [
+      269,
+      68,
+      1253,
+      141
+    ],
+    "left_edge_alpha_feather" : 80,
+    "page" : "accounts",
+    "source" : "design-references\/accounts.png",
+    "unchanged_artwork_pixels_checked" : 33915
+  },
+  {
+    "cleared_source_rectangles" : [
+      [
+        510,
+        96,
+        504,
+        95
+      ],
+      [
+        1090,
+        106,
+        381,
+        68
+      ]
+    ],
+    "crop" : [
+      269,
+      64,
+      1253,
+      156
+    ],
+    "left_edge_alpha_feather" : 0,
+    "page" : "profile",
+    "source" : "design-references\/profile.png",
+    "unchanged_artwork_pixels_checked" : 35005
+  },
+  {
+    "cleared_source_rectangles" : [
+      [
+        291,
+        88,
+        214,
+        42
+      ],
+      [
+        291,
+        135,
+        562,
+        73
+      ],
+      [
+        291,
+        226,
+        780,
+        144
+      ],
+      [
+        292,
+        382,
+        1205,
+        294
+      ],
+      [
+        274,
+        680,
+        1237,
+        158
+      ],
+      [
+        670,
+        914,
+        407,
+        60
+      ]
+    ],
+    "crop" : [
+      249,
+      64,
+      1287,
+      960
+    ],
+    "left_edge_alpha_feather" : 80,
+    "page" : "chat",
+    "source" : "design-references\/chat.png",
+    "unchanged_artwork_pixels_checked" : 118272
+  }
+]

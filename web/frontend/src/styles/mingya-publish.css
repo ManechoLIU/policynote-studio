@@ -1,0 +1,195 @@
+/* Binding reference: publish.png; preserves real automated/manual publishing paths. */
+.publishing-workspace { height:100%; min-height:0; padding:0 14px 24px 22px; overflow-y:auto; color:#141921; }
+.publishing-workspace .mingya-publishing-heading { flex:0 0 auto; padding:16px 4px 18px; }
+.publishing-workspace .mingya-publishing-heading h1 { display:flex; align-items:center; gap:16px; margin:0; font-size:34px; line-height:1.3; font-weight:750; }
+.publishing-workspace .mingya-publishing-heading h1 > span { display:block; width:6px; height:31px; border-radius:4px; background:#ff940d; }
+.publishing-workspace .mingya-publishing-heading p { margin:5px 0 0 23px; color:#48515e; font-size:17px; }
+.publishing-workspace .publishing-mode-bar { flex:0 0 auto; gap:10px 18px; padding:0 4px 19px; border:0; }
+.publishing-workspace .publishing-mode-bar .subnav-tabs { display:flex; gap:0; padding:0; border:1px solid #dbe1ea; border-radius:10px; overflow:hidden; background:rgba(255,255,255,.5); }
+.publishing-workspace .publishing-mode-bar .subnav-tab { min-width:178px; min-height:43px; padding:9px 24px; border:1px solid transparent; border-radius:9px; background:transparent; color:#111923; font-size:17px; }
+.publishing-workspace .publishing-mode-bar .subnav-tab.active { border-color:#ff8b00; background:#fff8ee; color:#ed7800; }
+.publishing-workspace .publishing-mode-bar > .pv-hint { max-width:630px; font-size:12px; line-height:1.6; }
+.publishing-workspace .publishing-mode-content { flex:1 0 auto; min-height:0; overflow:visible; }
+.publishing-workspace .publish-page { display:grid; grid-template-columns:minmax(0,40%) minmax(0,1fr); align-items:start; gap:12px; height:auto; overflow:visible; }
+.publishing-workspace .publish-editor { width:auto; min-width:0; max-width:none; min-height:660px; padding:21px 18px; overflow:visible; border:1px solid #dbe1ea; border-radius:15px; background:rgba(255,255,255,.6); }
+.publishing-workspace .publish-editor > :is(.page-title,.page-subtitle) { display:none; }
+.publishing-workspace .publish-editor > .field-label { display:flex; align-items:center; flex-wrap:wrap; gap:4px; margin:6px 0 11px; color:#151a23; font-size:18px; font-weight:650; line-height:1.5; }
+.publishing-workspace .publish-editor > .field-label:not(:first-of-type) { margin-top:25px; }
+.publishing-workspace .publish-editor > .field-label > span:not(.pv-badge) { display:block; width:100%; font-size:11px !important; color:#78818e !important; font-weight:400; }
+.publishing-workspace .publish-editor > .field { width:100%; min-height:44px; padding:10px 12px; border:1px solid #d2d9e4; border-radius:11px; background:rgba(255,255,255,.62); color:#17202c; font-size:15px; line-height:1.55; box-shadow:none; }
+.publishing-workspace .publish-editor > textarea.field { min-height:220px !important; resize:vertical; }
+.publishing-workspace .mingya-media-choices { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; width:100%; }
+.publishing-workspace .mingya-media-choices > button { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; min-width:0; min-height:103px; padding:12px 7px; border:1px dashed #c7ceda; border-radius:12px; background:rgba(255,255,255,.45); color:#151b25; cursor:pointer; }
+.publishing-workspace .mingya-media-choices > button > svg { color:#858e9a; }
+.publishing-workspace .mingya-media-choices strong { font-size:17px; font-weight:600; }
+.publishing-workspace .mingya-media-choices span { color:#7b8593; font-size:12px; }
+.publishing-workspace .publish-previews { display:flex; flex-direction:column; min-width:0; padding:17px 19px; gap:20px; overflow:visible; border:1px solid #dbe1ea; border-radius:15px; background:rgba(255,255,255,.6); }
+.publishing-workspace :is(.mingya-publish-platforms,.mingya-publish-preview-section,.mingya-publish-settings) { min-width:0; }
+.publishing-workspace .publish-previews h2 { display:flex; align-items:center; gap:10px; margin:0 0 15px; color:#131923; font-size:17px; font-weight:650; line-height:1.5; }
+.publishing-workspace .publish-previews h2 small { color:#67717f; font-size:12px; font-weight:400; }
+.publishing-workspace .mingya-publish-section-rule { width:5px; height:20px; flex:0 0 5px; border-radius:4px; background:#ff950b; }
+.publishing-workspace .mingya-platform-options { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:8px; }
+.publishing-workspace .mingya-platform-option { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; min-width:0; min-height:105px; padding:9px 3px; border:1px solid #dfe4ed; border-radius:12px; background:rgba(255,255,255,.66); color:#1c232d; cursor:pointer; }
+.publishing-workspace .mingya-platform-option.selected { border-color:#ffb068; background:#fff8ee; }
+.publishing-workspace .mingya-publish-platform-icon { width:30px; height:30px; border-radius:7px; }
+.publishing-workspace .mingya-platform-name { display:flex; align-items:center; justify-content:center; gap:5px; font-size:12px; white-space:nowrap; }
+.publishing-workspace .mingya-checkbox { display:inline-flex; justify-content:center; align-items:center; width:14px; height:14px; flex:0 0 14px; border:1px solid #bdc6d3; border-radius:3px; color:#ff7611; font-size:11px; line-height:1; }
+.publishing-workspace .mingya-platform-option.selected .mingya-checkbox { border-color:#ff970e; background:#ffefd8; }
+.publishing-workspace .mingya-platform-status { max-width:100%; overflow:hidden; color:#7a8595; font-size:12px; line-height:1.3; white-space:nowrap; text-overflow:ellipsis; }
+.publishing-workspace .mingya-publish-right-body { display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:10px; align-items:start; }
+.publishing-workspace .mingya-publish-preview-section { padding:12px 10px; border:1px solid #e8ebf1; border-radius:12px; background:rgba(255,255,255,.45); }
+.publishing-workspace .mingya-preview-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:14px; }
+.publishing-workspace .mingya-preview-heading h2 { flex:0 0 auto; margin:0; }
+.publishing-workspace .mingya-preview-heading label { display:flex; align-items:center; color:#596372; font-size:12px; white-space:nowrap; }
+.publishing-workspace .mingya-preview-heading select { max-width:100px; border:0; background:transparent; color:#17202b; font-size:12px; }
+.publishing-workspace .pv-card { border:1px solid #dce2ec; border-radius:14px; background:#fff; box-shadow:none; }
+.publishing-workspace .pv-card[hidden] { display:none; }
+.publishing-workspace .pv-head { padding:9px 12px; border-color:#edf0f5; }
+.publishing-workspace .pv-plat { font-size:12px; }
+.publishing-workspace .pv-count { font-size:11px; }
+.publishing-workspace .pv-badge { font-size:10px; }
+.publishing-workspace .pv-body { padding:9px; }
+.publishing-workspace .mingya-publish-cover { display:flex; align-items:center; justify-content:center; flex-direction:column; gap:10px; min-height:210px; margin-bottom:14px; overflow:hidden; border-radius:11px; background:#edf1f7; color:#788495; font-size:13px; text-align:center; }
+.publishing-workspace .mingya-publish-cover > svg { color:#b6becc; }
+.publishing-workspace .mingya-publish-cover :is(img,video) { width:100%; max-height:260px; object-fit:contain; }
+.publishing-workspace .pv-title { margin:0 3px 9px; color:#141a24; font-size:17px; }
+.publishing-workspace .pv-text { color:#4c5667; font-size:14px; line-height:1.65; }
+.publishing-workspace .pv-foot { align-items:flex-start; flex-wrap:wrap; padding:8px 10px; background:#fbfcff; }
+.publishing-workspace .pv-foot > .pv-hint { flex:1 0 100%; }
+.publishing-workspace .pv-hint { color:#6b7787; font-size:11px; line-height:1.55; }
+.publishing-workspace .mingya-publish-settings { display:flex; flex-direction:column; gap:10px; }
+.publishing-workspace :is(.mingya-publish-review,.mingya-publish-personalization) { padding:11px 10px; border:1px solid #e8ebf1; border-radius:12px; background:rgba(255,255,255,.58); }
+.publishing-workspace .mingya-publish-settings h2 { margin-bottom:9px; font-size:16px; }
+.publishing-workspace .mingya-publish-review p { margin:7px 0; color:#5d6878; font-size:12px; line-height:1.55; }
+.publishing-workspace .mingya-personalization-row { display:flex; align-items:center; gap:8px; min-width:0; padding:5px 1px; border-bottom:1px solid #edf0f5; font-size:12px; }
+.publishing-workspace .mingya-personalization-row:last-child { border-bottom:0; }
+.publishing-workspace .mingya-personalization-icon { width:22px; height:21px; flex:0 0 22px; border-radius:5px; }
+.publishing-workspace .mingya-personalization-row > span { min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.publishing-workspace .mingya-personalization-row > button { margin-left:auto; padding:0; border:0; background:transparent; color:#0871e5; font-size:11px; white-space:nowrap; cursor:pointer; }
+.publishing-workspace .mingya-personalization-row > button:disabled { color:#9ca5b2; cursor:not-allowed; }
+.publishing-workspace .publish-actions { display:flex; flex-wrap:wrap; gap:9px; margin:0; }
+.publishing-workspace .publish-actions > .btn { display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:46px; padding:10px 15px; border:1px solid #d5dce7; border-radius:12px; background:#fff; color:#161d28; font-size:16px; white-space:nowrap; }
+.publishing-workspace .publish-actions > .btn:first-child { flex:1 0 calc((100% - 18px)/3); order:0; border-color:#ff8b00; color:#ef7900; background:#fff; }
+.publishing-workspace .publish-actions > .btn:nth-child(2) { flex:1 0 calc((100% - 18px)/3); order:1; }
+.publishing-workspace .publish-actions > .btn:nth-child(4):not(.btn-ghost) { flex:1 0 calc((100% - 18px)/3); order:2; border-color:#ff1243; background:#ff1648; color:#fff; }
+.publishing-workspace .publish-actions > .btn:nth-child(3) { order:3; }
+.publishing-workspace .publish-actions > .btn:last-child.btn-ghost { order:4; }
+.publishing-workspace .publish-actions > .btn:nth-child(3),.publishing-workspace .publish-actions > .btn:last-child.btn-ghost { min-height:30px; padding:5px 8px; border-color:transparent; background:transparent; color:#677382; font-size:12px; }
+.publishing-workspace .publish-actions > .btn:disabled { opacity:.5; cursor:not-allowed; }
+.publishing-workspace .publish-saved-note { margin:14px 0 0; color:#7a8594; font-size:11px; line-height:1.55; }
+.publishing-workspace .publish-editor > .panel { padding:11px 12px; border-color:#dce2eb; border-radius:11px; background:#f5f8fc; line-height:1.65; }
+.publishing-workspace .media-grid { grid-template-columns:repeat(4,minmax(0,1fr)); max-height:250px; overflow-y:auto; }
+.publishing-workspace .media-cell { min-width:0; }
+.publishing-workspace :is(button,input,textarea,select,a):focus-visible { outline:2px solid #3676ba; outline-offset:2px; }
+@media (min-width:901px) and (max-width:1450px), (min-width:1101px) and (max-height:820px) {
+  .publishing-workspace { padding:0 18px 20px; }
+  .publishing-workspace .mingya-publishing-heading { padding:5px 2px 13px; }
+  .publishing-workspace .mingya-publishing-heading h1 { gap:12px; font-size:28px; }
+  .publishing-workspace .mingya-publishing-heading h1 > span { height:26px; width:5px; }
+  .publishing-workspace .mingya-publishing-heading p { margin-top:3px; margin-left:17px; font-size:14px; }
+  .publishing-workspace .publishing-mode-bar { padding:0 2px 13px; }
+  .publishing-workspace .publishing-mode-bar .subnav-tab { min-width:142px; min-height:34px; padding:6px 16px; font-size:14px; }
+  .publishing-workspace .publishing-mode-bar > .pv-hint { max-width:500px; font-size:11px; }
+  .publishing-workspace .publish-page { grid-template-columns:minmax(0,38%) minmax(0,1fr); }
+  .publishing-workspace .publish-editor { min-height:0; padding:14px 15px; }
+  .publishing-workspace .publish-editor > .field-label { margin:3px 0 7px; font-size:15px; }
+  .publishing-workspace .publish-editor > .field-label:not(:first-of-type) { margin-top:17px; }
+  .publishing-workspace .publish-editor > .field { min-height:34px; padding:7px 10px; font-size:14px; }
+  .publishing-workspace .publish-editor > textarea.field { min-height:165px !important; }
+  .publishing-workspace .mingya-media-choices { gap:10px; }
+  .publishing-workspace .mingya-media-choices > button { min-height:72px; padding:8px 5px; gap:3px; }
+  .publishing-workspace .mingya-media-choices strong { font-size:14px; }
+  .publishing-workspace .mingya-media-choices span { font-size:11px; }
+  .publishing-workspace .publish-previews { padding:13px 14px; gap:14px; }
+  .publishing-workspace .publish-previews h2 { gap:7px; margin-bottom:10px; font-size:15px; }
+  .publishing-workspace .mingya-platform-options { gap:6px; }
+  .publishing-workspace .mingya-platform-option { min-height:79px; gap:5px; padding:7px 2px; border-radius:9px; }
+  .publishing-workspace .mingya-publish-platform-icon { width:25px; height:25px; }
+  .publishing-workspace .mingya-platform-name { gap:3px; font-size:10px; }
+  .publishing-workspace .mingya-platform-status { font-size:10px; }
+  .publishing-workspace .mingya-checkbox { width:11px; height:11px; flex-basis:11px; font-size:9px; }
+  .publishing-workspace .mingya-publish-right-body { grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:8px; }
+  .publishing-workspace .mingya-publish-preview-section { padding:9px 8px; }
+  .publishing-workspace .mingya-preview-heading { margin-bottom:10px; }
+  .publishing-workspace .mingya-preview-heading label,.publishing-workspace .mingya-preview-heading select { font-size:10px; }
+  .publishing-workspace .mingya-preview-heading select { max-width:76px; }
+  .publishing-workspace .mingya-publish-cover { min-height:150px; margin-bottom:11px; font-size:11px; }
+  .publishing-workspace .mingya-publish-cover :is(img,video) { max-height:180px; }
+  .publishing-workspace .pv-head { padding:6px 8px; }
+  .publishing-workspace .pv-body { padding:7px; }
+  .publishing-workspace .pv-title { font-size:15px; }
+  .publishing-workspace .pv-text { font-size:13px; }
+  .publishing-workspace :is(.mingya-publish-review,.mingya-publish-personalization) { padding:9px 8px; }
+  .publishing-workspace .mingya-publish-settings h2 { font-size:14px; }
+  .publishing-workspace .mingya-publish-review p { font-size:11px; }
+  .publishing-workspace .mingya-personalization-row { gap:6px; padding:4px 0; font-size:11px; }
+  .publishing-workspace .mingya-personalization-icon { width:18px; height:18px; flex-basis:18px; }
+  .publishing-workspace .mingya-personalization-row > button { font-size:10px; }
+  .publishing-workspace .publish-actions { gap:7px; }
+  .publishing-workspace .publish-actions > .btn { min-height:36px; gap:6px; padding:7px 10px; font-size:14px; border-radius:10px; }
+  .publishing-workspace .publish-actions > .btn:nth-child(3),.publishing-workspace .publish-actions > .btn:last-child.btn-ghost { font-size:11px; min-height:27px; padding:4px 6px; }
+  .publishing-workspace .publish-saved-note { font-size:10px; }
+}
+@media (max-width:900px) {
+  .publishing-workspace { padding:4px 14px 24px; }
+  .publishing-workspace .mingya-publishing-heading h1 { font-size:28px; }
+  .publishing-workspace .mingya-publishing-heading p { font-size:14px; }
+  .publishing-workspace .publish-page { grid-template-columns:minmax(0,1fr); }
+  .publishing-workspace .publish-editor { min-height:0; padding:16px; }
+  .publishing-workspace .publish-editor > textarea.field { min-height:180px !important; }
+  .publishing-workspace .publishing-mode-bar .subnav-tab { min-width:130px; min-height:36px; padding:7px 12px; font-size:14px; }
+  .publishing-workspace .publish-previews { padding:13px; }
+  .publishing-workspace .mingya-platform-options { grid-template-columns:repeat(4,minmax(0,1fr)); }
+  .publishing-workspace .mingya-publish-right-body { grid-template-columns:minmax(0,1fr); }
+  .publishing-workspace .mingya-publish-settings { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .publishing-workspace .publish-actions > .btn { min-height:38px; padding:8px 10px; font-size:14px; }
+}
+/* Dark theme only. Light rules above stay the baseline. */
+:root[data-theme='dark'] .publishing-workspace { color: var(--text); }
+:root[data-theme='dark'] .publishing-workspace .mingya-publishing-heading h1 > span,
+:root[data-theme='dark'] .publishing-workspace .mingya-publish-section-rule { background: var(--brand-gold); }
+:root[data-theme='dark'] .publishing-workspace .mingya-publishing-heading p,
+:root[data-theme='dark'] .publishing-workspace .publish-previews h2 small,
+:root[data-theme='dark'] .publishing-workspace .mingya-preview-heading label,
+:root[data-theme='dark'] .publishing-workspace .pv-text,
+:root[data-theme='dark'] .publishing-workspace .pv-hint,
+:root[data-theme='dark'] .publishing-workspace .mingya-publish-review p,
+:root[data-theme='dark'] .publishing-workspace .publish-saved-note,
+:root[data-theme='dark'] .publishing-workspace .mingya-platform-status,
+:root[data-theme='dark'] .publishing-workspace .mingya-media-choices span { color: var(--text-secondary); }
+:root[data-theme='dark'] .publishing-workspace .publish-editor > .field-label > span:not(.pv-badge) { color: var(--text-tertiary) !important; }
+:root[data-theme='dark'] .publishing-workspace .publishing-mode-bar .subnav-tabs,
+:root[data-theme='dark'] .publishing-workspace .publish-editor,
+:root[data-theme='dark'] .publishing-workspace .publish-editor > .field,
+:root[data-theme='dark'] .publishing-workspace .publish-previews,
+:root[data-theme='dark'] .publishing-workspace .mingya-media-choices > button,
+:root[data-theme='dark'] .publishing-workspace .mingya-platform-option,
+:root[data-theme='dark'] .publishing-workspace .mingya-publish-preview-section,
+:root[data-theme='dark'] .publishing-workspace .pv-card,
+:root[data-theme='dark'] .publishing-workspace :is(.mingya-publish-review,.mingya-publish-personalization),
+:root[data-theme='dark'] .publishing-workspace .publish-actions > .btn:not(:nth-child(4)) { border-color: var(--border); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .publishing-workspace .publishing-mode-bar .subnav-tab { color: var(--text); }
+:root[data-theme='dark'] .publishing-workspace .publishing-mode-bar .subnav-tab.active,
+:root[data-theme='dark'] .publishing-workspace .mingya-platform-option.selected { border-color: var(--brand-gold); background: var(--brand-gold-soft); color: var(--brand-gold); }
+:root[data-theme='dark'] .publishing-workspace .publish-editor > .field-label,
+:root[data-theme='dark'] .publishing-workspace .publish-previews h2,
+:root[data-theme='dark'] .publishing-workspace .mingya-preview-heading select,
+:root[data-theme='dark'] .publishing-workspace .pv-title { color: var(--text); }
+:root[data-theme='dark'] .publishing-workspace .pv-title.over,
+:root[data-theme='dark'] .publishing-workspace .pv-count.over { color: var(--red); }
+:root[data-theme='dark'] .publishing-workspace .mingya-media-choices > button > svg,
+:root[data-theme='dark'] .publishing-workspace .mingya-publish-cover,
+:root[data-theme='dark'] .publishing-workspace .mingya-publish-cover > svg { color: var(--text-tertiary); }
+:root[data-theme='dark'] .publishing-workspace .mingya-checkbox { border-color: var(--border-strong); color: var(--brand-gold); }
+:root[data-theme='dark'] .publishing-workspace .mingya-platform-option.selected .mingya-checkbox { border-color: var(--brand-gold); background: var(--brand-gold-soft); color: var(--brand-gold); }
+:root[data-theme='dark'] .publishing-workspace .pv-head,
+:root[data-theme='dark'] .publishing-workspace .mingya-personalization-row { border-color: var(--border); }
+:root[data-theme='dark'] .publishing-workspace .mingya-publish-cover,
+:root[data-theme='dark'] .publishing-workspace .pv-foot,
+:root[data-theme='dark'] .publishing-workspace .publish-editor > .panel { background: var(--surface-2); border-color: var(--border); }
+:root[data-theme='dark'] .publishing-workspace .mingya-personalization-row > button { color: var(--brand-blue); }
+:root[data-theme='dark'] .publishing-workspace .mingya-personalization-row > button:disabled { color: var(--text-tertiary); }
+:root[data-theme='dark'] .publishing-workspace .publish-actions > .btn:first-child { border-color: var(--brand-gold); background: var(--surface); color: var(--brand-gold); }
+:root[data-theme='dark'] .publishing-workspace .publish-actions > .btn:nth-child(3),
+:root[data-theme='dark'] .publishing-workspace .publish-actions > .btn:last-child.btn-ghost { border-color: transparent; background: transparent; color: var(--text-secondary); }
+:root[data-theme='dark'] .publishing-workspace :is(button,input,textarea,select,a):focus-visible { outline-color: var(--brand-blue); }

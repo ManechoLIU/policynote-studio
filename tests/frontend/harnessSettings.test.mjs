@@ -66,6 +66,7 @@ function setup({ runtime = 'openclaw', locked = false, installed = true, saveErr
       createElement: (type, props, ...children) => ({ type, props: props || {}, children: children.flat() }),
     },
     SettingsSelect: 'settings-select',
+    IconRefresh: 'icon-refresh',
     useState: initial => {
       const index = cursor++;
       if (!(index in state)) state[index] = initial;
@@ -133,6 +134,13 @@ function text(tree) {
   return (tree.children || []).map(text).join('');
 }
 
+// Resolve the save action by its label; visual layout can move the help button before it.
+function saveButton(tree) {
+  const matches = nodes(tree, 'button').filter(node => ['保存底座', '保存中…'].includes(text(node)));
+  assert.equal(matches.length, 1, 'the harness exposes exactly one save action');
+  return matches[0];
+}
+
 test('changing harness is local until save and retains its model override', async () => {
   const view = setup();
   view.render();
@@ -147,8 +155,8 @@ test('changing harness is local until save and retains its model override', asyn
   nodes(tree, 'settings-select').find(node => node.props.label === 'Codex 沙箱').props.onChange('read-only');
   nodes(tree, 'input')[0].props.onChange({ target: { value: 'custom-model' } });
   tree = view.render();
-  nodes(tree, 'button')[0].props.onClick();
-  assert.equal(nodes(view.render(), 'button')[0].props.disabled, true);
+  saveButton(tree).props.onClick();
+  assert.equal(saveButton(view.render()).props.disabled, true);
   await settle();
   assert.deepEqual(view.saves, [{ runtime: 'codex', model: 'custom-model', sandbox: 'read-only', codexAutoApprove: false }]);
   assert.deepEqual(view.changes, ['openclaw', 'codex']);
@@ -166,12 +174,12 @@ test('Codex permanent approval defaults off, saves explicitly and stays exclusiv
   toggle.props.onClick();
   tree = view.render();
   assert.equal(nodes(tree, 'button').find(node => node.props.role === 'switch').props['aria-checked'], true);
-  nodes(tree, 'button')[0].props.onClick();
+  saveButton(tree).props.onClick();
   await settle();
   assert.equal(view.saves[0].codexAutoApprove, true);
   nodes(view.render(), 'settings-select')[0].props.onChange('opencode');
   assert.equal(nodes(view.render(), 'button').some(node => node.props.role === 'switch'), false);
-  nodes(view.render(), 'button')[0].props.onClick();
+  saveButton(view.render()).props.onClick();
   await settle();
   assert.equal(view.saves[1].codexAutoApprove, undefined);
 });
@@ -182,7 +190,7 @@ test('environment-locked harness cannot be changed or saved', async () => {
   await settle();
   const tree = view.render();
   assert.equal(nodes(tree, 'settings-select')[0].props.disabled, true);
-  assert.equal(nodes(tree, 'button')[0].props.disabled, true);
+  assert.equal(saveButton(tree).props.disabled, true);
   assert.match(text(tree), /EASEL_AGENT_RUNTIME 已固定底座/);
 });
 
@@ -192,7 +200,7 @@ test('settings can retry a failed read without saving or silently changing the e
   await settle();
   let tree = view.render();
   assert.match(text(tree), /读取失败：.*temporary connection failure/);
-  assert.equal(nodes(tree, 'button')[0].props.disabled, true);
+  assert.equal(saveButton(tree).props.disabled, true);
   const reload = nodes(tree, 'button').find(node => text(node) === '重新读取');
   assert.ok(reload);
   assert.equal(reload.props.disabled, false);
@@ -213,7 +221,7 @@ test('uninstalled native harness cannot be saved and does not show Codex sandbox
   await settle();
   nodes(view.render(), 'settings-select')[0].props.onChange('acp');
   const tree = view.render();
-  assert.equal(nodes(tree, 'button')[0].props.disabled, true);
+  assert.equal(saveButton(tree).props.disabled, true);
   assert.equal(nodes(tree, 'settings-select').length, 1);
   assert.match(text(tree), /不代表模型已登录/);
 });
@@ -231,24 +239,24 @@ test('engine options retain missing harnesses with configuration previews and in
   assert.match(text(preview), /未检测到 opencode/);
   assert.match(text(preview), /原有配置未删除/);
   assert.equal(nodes(preview, 'input')[0].props.value, 'provider/model');
-  assert.equal(nodes(preview, 'button')[0].props.disabled, true);
+  assert.equal(saveButton(preview).props.disabled, true);
   const missing = setup({ runtime: 'codex', installed: false });
   missing.render();
   await settle();
   assert.deepEqual(nodes(missing.render(), 'settings-select')[0].props.options.map(option => option.value),
     ['api', 'openclaw', 'opencode', 'codex', 'acp']);
-  assert.equal(nodes(missing.render(), 'button')[0].props.disabled, true);
+  assert.equal(saveButton(missing.render()).props.disabled, true);
 });
 test('failed harness save shows error without switching the active runtime', async () => {
   const view = setup({ saveError: 'active task' });
   view.render();
   await settle();
   nodes(view.render(), 'settings-select')[0].props.onChange('opencode');
-  nodes(view.render(), 'button')[0].props.onClick();
+  saveButton(view.render()).props.onClick();
   await settle();
   assert.match(text(view.render()), /保存失败：.*active task/);
   assert.deepEqual(view.changes, ['openclaw']);
-  assert.equal(nodes(view.render(), 'button')[0].props.disabled, false);
+  assert.equal(saveButton(view.render()).props.disabled, false);
 });
 
 test('harness form reuses settings input styling and managed connection hints', async () => {
@@ -284,10 +292,10 @@ test('chat-only can be saved without any agent CLI and preserves the active engi
   await settle();
   nodes(view.render(), 'settings-select')[0].props.onChange('api');
   let tree = view.render();
-  assert.equal(nodes(tree, 'button')[0].props.disabled, false);
+  assert.equal(saveButton(tree).props.disabled, false);
   assert.equal(nodes(tree, 'input').length, 0);
   assert.deepEqual(view.changes, ['openclaw']);
-  nodes(tree, 'button')[0].props.onClick();
+  saveButton(tree).props.onClick();
   await settle();
   tree = view.render();
   assert.deepEqual(view.changes, ['openclaw', 'api']);
@@ -322,7 +330,7 @@ for (const runtime of ['codex', 'opencode']) {
     dropdown.props.onChange('another-model');
     tree = view.render();
     assert.equal(nodes(tree, 'input')[0].props.value, 'another-model');
-    nodes(tree, 'button')[0].props.onClick();
+    saveButton(tree).props.onClick();
     await settle();
     assert.equal(view.saves[0].model, 'another-model');
     assert.equal(view.saves[0].runtime, runtime);

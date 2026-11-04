@@ -4,7 +4,7 @@
 网页端全挂，或者外部站点能驱动本机写操作。两种都得有测试钉住。
 
 契约（两条判据按请求形态二选一）：
-* 带 Origin → 必须在 `_LOCAL_ORIGINS` 里；
+* 带 Origin → 必须在 `_LOCAL_ORIGINS` 里或为回环客户端访问的同源页面；
 * 不带 Origin → 对端必须来自回环地址。
 
 用不存在的路径 `/api/__guard_probe__` 做探针：中间件在路由之前执行，
@@ -78,6 +78,22 @@ def test_write_from_local_origins_is_allowed():
     for origin in ('http://127.0.0.1:7860', 'http://localhost:7860',
                    'http://127.0.0.1:5173', 'http://localhost:5173'):
         assert client.post(PROBE, headers={'Origin': origin}).status_code == 404, origin
+
+
+def test_custom_port_same_origin_from_loopback_is_allowed(monkeypatch):
+    monkeypatch.setattr(web, '_LOCAL_ORIGINS', [LOCAL_ORIGIN])
+    for origin in ('http://127.0.0.1:7862', 'http://localhost:7862'):
+        client = TestClient(web.app, base_url=origin, client=LOOPBACK)
+        assert client.post(PROBE, headers={'Origin': origin}).status_code == 404
+
+
+def test_custom_port_does_not_allow_another_local_origin_or_remote_peer(monkeypatch):
+    monkeypatch.setattr(web, '_LOCAL_ORIGINS', [LOCAL_ORIGIN])
+    client = TestClient(web.app, base_url='http://127.0.0.1:7862', client=LOOPBACK)
+    assert client.post(PROBE, headers={'Origin': 'http://127.0.0.1:9235'}).status_code == 403
+    assert client.post(PROBE, headers={'Origin': 'https://127.0.0.1:7862'}).status_code == 403
+    remote = TestClient(web.app, base_url='http://127.0.0.1:7862', client=REMOTE)
+    assert remote.post(PROBE, headers={'Origin': 'http://127.0.0.1:7862'}).status_code == 403
 
 
 # ---------------------------------------------------------------- 只读与预检

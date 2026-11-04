@@ -3,10 +3,12 @@ import type { ComponentType } from 'react';
 import { fetchSkills } from '../lib/api';
 import type { SkillItem } from '../lib/api';
 import SkillDrawer from './SkillDrawer';
+import { PageBanner } from './MingyaPrimitives';
+import '../styles/mingya-skills.css';
 import { displayName } from '../lib/skillDisplayNames';
 import {
   IconSearch, IconCompass, IconSkills, IconSend, IconChart, IconLayers,
-  IconVideo, IconImage, IconMusic, IconMic, IconText, IconLayout, IconProfile, IconOutputs,
+  IconVideo, IconImage, IconMusic, IconMic, IconText, IconLayout, IconProfile, IconOutputs, IconChevron, IconCheck,
 } from './icons';
 
 interface SkillPageProps {
@@ -58,6 +60,7 @@ export default function SkillPage({ persona }: SkillPageProps) {
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
+  const [activeLayer, setActiveLayer] = useState('discover');
 
   const load = () => {
     fetchSkills().then(setSkills).catch(() => setError('加载 SKILL 列表失败'));
@@ -81,84 +84,54 @@ export default function SkillPage({ persona }: SkillPageProps) {
   }, [filtered]);
 
   const orderedLayers = [...LAYERS, OTHER].filter((l) => grouped[l.key]?.length);
-  const needApiCount = skills.filter((s) => s.needsApi && !s.apiConfigured).length;
+  const layerHelp: Record<string, string> = {
+    discover: '找趋势、找话题、找灵感', plan: '明确方向、拆解选题', produce: '产出图文、图片与视频',
+    publish: '高效发布、规范管理', attribute: '复盘内容、沉淀经验', general: '日常创作、通用工具', other: '更多创作辅助工具',
+  };
 
   return (
-    <div className="skills-page">
-      <div className="skills-page-head">
-        <h1 className="page-title">技能库</h1>
-        <p className="page-subtitle">
-          共 {skills.length} 个技能，按流水线层分区浏览。点卡片查看说明、就地运行；
-          标 <span className="badge badge-warn" style={{ padding: '1px 7px' }}>需 API</span> 的需先配置密钥
-          {needApiCount > 0 && `（当前 ${needApiCount} 个待配置）`}。
-        </p>
-        <div className="skill-search">
-          <span className="skill-search-ic"><IconSearch size={16} /></span>
-          <input
-            className="field"
-            placeholder="搜索技能名或描述…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          {query && <button className="btn btn-ghost btn-sm" onClick={() => setQuery('')}>清除</button>}
+    <div className="skills-page strict-skills-page">
+      <PageBanner page="skills" title="技能库" subtitle="为内容创作，找到顺手的工具">
+        <form className="strict-skill-search" onSubmit={(e) => e.preventDefault()} role="search">
+          <label className="strict-skill-search-field"><IconSearch size={25} /><input aria-label="搜索技能名或描述" placeholder="搜索技能名或描述…" value={query} onChange={(e) => setQuery(e.target.value)} />{query && <button type="button" className="strict-search-clear" onClick={() => setQuery('')}>清除</button>}</label>
+          <button type="submit" className="strict-skill-search-submit">搜索</button>
+        </form>
+      </PageBanner>
+
+      {error && <div className="strict-skills-error">{error}</div>}
+
+      <div className="strict-skills-layout">
+        <nav className="strict-skills-layers" aria-label="技能层级">
+          {[...LAYERS, ...(grouped.other?.length ? [OTHER] : [])].map((layer) => (
+            <button key={layer.key} className={`strict-layer-item ${activeLayer === layer.key ? 'is-active' : ''}`} onClick={() => { setActiveLayer(layer.key); document.getElementById(`skill-layer-${layer.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>
+              <span className="strict-layer-icon"><layer.Icon size={37} /></span>
+              <span className="strict-layer-copy"><strong>{layer.label}{layer.key === 'general' || layer.key === 'other' ? '' : '层'}</strong><span>{layerHelp[layer.key]}</span></span>
+              <IconChevron size={21} />
+            </button>
+          ))}
+        </nav>
+        <div className="strict-skills-results">
+          {orderedLayers.length === 0 && !error && <div className="empty-state"><IconSearch size={40} /><p>没有匹配「{query}」的技能</p></div>}
+          <div className="strict-skills-grid">
+            {orderedLayers.flatMap((layer) => grouped[layer.key].map((s, index) => {
+              const meta = LAYER_META[s.layer] || OTHER;
+              const Icon = iconFor(s.name, meta.Icon);
+              const alert = s.needsApi && !s.apiConfigured;
+              const statusClass = !s.needsApi ? 'not-required' : alert ? 'needs-api' : 'configured';
+              const statusLabel = !s.needsApi ? '无需 API' : alert ? '需 API' : '已配置';
+              return (
+                <button type="button" key={s.name} id={index === 0 ? `skill-layer-${layer.key}` : undefined} className="strict-skill-card" onClick={() => setSelected(s.name)} title={`${displayName(s.name)} · ${s.name}`}>
+                  <span className="strict-skill-card-head"><span className={`strict-skill-icon ${['discover', 'produce'].includes(s.layer) ? 'is-warm' : ''}`}><Icon size={38} /></span><span className="strict-skill-heading"><strong>{displayName(s.name)}</strong><span>技术名：{s.name}</span></span></span>
+                  <span className="strict-skill-description">{s.description?.trim() || LAYER_DESC[layer.key]}</span>
+                  <span className="strict-skill-footer"><span><span className={`strict-skill-status ${statusClass}`}>{s.needsApi ? (alert ? <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true"><path d="M7 18H5a4 4 0 0 1-.5-8A6 6 0 0 1 16 7a5 5 0 0 1 3 9h-2M12 21V11m-4 4 4-4 4 4" /></svg> : <span className="strict-configured-check"><IconCheck size={13} /></span>) : null}{statusLabel}</span></span><span className="strict-skill-details">查看详情<IconChevron size={16} /></span></span>
+                </button>
+              );
+            }))}
+          </div>
         </div>
       </div>
 
-      {error && <div style={{ color: 'var(--red)', maxWidth: 1100, margin: '16px auto' }}>{error}</div>}
-
-      <div className="skills-body">
-        {orderedLayers.length === 0 && !error && (
-          <div className="empty-state" style={{ height: 240 }}>
-            <div className="empty-icon"><IconSearch size={40} /></div>
-            <p>没有匹配「{query}」的技能</p>
-          </div>
-        )}
-
-        {orderedLayers.map((layer) => (
-          <section key={layer.key}>
-            <div className="section-title">
-              <span className="section-ic" style={{ color: layer.color }}><layer.Icon size={15} /></span>
-              {layer.label}
-              <span style={{ color: 'var(--text-tertiary)', fontWeight: 500 }}>· {grouped[layer.key].length}</span>
-            </div>
-            <div className="skill-grid">
-              {grouped[layer.key].map((s) => {
-                const meta = LAYER_META[s.layer] || OTHER;
-                const Icon = iconFor(s.name, meta.Icon);
-                const alert = s.needsApi && !s.apiConfigured;
-                return (
-                  <div
-                    key={s.name}
-                    className="card card-hover skill-card"
-                    style={{ ['--layer-color' as string]: meta.color }}
-                    onClick={() => setSelected(s.name)}
-                  >
-                    {alert && <div className="skill-card-alert" title="需要配置 API key">!</div>}
-                    <div className="skill-card-icon" style={{ color: meta.color }}><Icon size={19} /></div>
-                    <div className="skill-card-name">{displayName(s.name)}</div>
-                    <div className="skill-card-rawname">{s.name}</div>
-                    <div className="skill-card-desc">{s.description?.trim() || LAYER_DESC[layer.key]}</div>
-                    <div className="skill-card-foot">
-                      {s.needsApi && (s.apiConfigured
-                        ? <span className="badge badge-ok">已配置</span>
-                        : <span className="badge badge-warn">需 API</span>)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        ))}
-      </div>
-
-      {selected && (
-        <SkillDrawer
-          skillName={selected}
-          persona={persona}
-          onClose={() => setSelected(null)}
-          onConfigured={load}
-        />
-      )}
+      {selected && <SkillDrawer skillName={selected} persona={persona} onClose={() => setSelected(null)} onConfigured={load} />}
     </div>
   );
 }

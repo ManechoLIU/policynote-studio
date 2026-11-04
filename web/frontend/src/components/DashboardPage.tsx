@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import '../styles/mingya-dashboard.css';
 import {
   fetchTrends, fetchSchedule, fetchOutputs, fetchAccounts, fetchIdeas,
   fetchAnalyticsPlatforms, fetchAccountAnalytics,
@@ -8,10 +9,11 @@ import type {
   AnalyticsPlatform, AccountAnalytics, AccountWhoami,
 } from '../lib/api';
 import type { Page } from './Sidebar';
+import { BannerBackground, ReferenceArtwork, SectionMark, WorkspaceGlyph } from './MingyaPrimitives';
 import { getWhoamiCache, verifyStale } from '../lib/whoami';
 import {
   IconFire, IconCalendar, IconOutputs, IconChat, IconSkills, IconAccounts,
-  IconIdea, IconPublish,
+  IconIdea, IconPublish, IconPlus, IconFile, IconEdit, IconChevron,
 } from './icons';
 
 /** 大数格式化：12000 → 1.2万。 */
@@ -46,6 +48,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
   const [outputs, setOutputs] = useState<OutputNode[]>([]);
   const [accounts, setAccounts] = useState<AccountItem[]>([]);
   const [ideas, setIdeas] = useState<Idea[]>([]);
+  const [loaded, setLoaded] = useState({ schedule: false, outputs: false, accounts: false, ideas: false });
   // 归因层：账号创作数据
   const [anaPlats, setAnaPlats] = useState<AnalyticsPlatform[]>([]);
   const [anaSel, setAnaSel] = useState('');
@@ -65,10 +68,10 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
 
   useEffect(() => {
     fetchTrends('weibo,douyin', 6).then((d) => setTrends(d.trends)).catch(() => {});
-    fetchSchedule().then(setSchedule).catch(() => {});
-    fetchOutputs().then(setOutputs).catch(() => {});
-    fetchAccounts().then(setAccounts).catch(() => {});
-    fetchIdeas().then(setIdeas).catch(() => {});
+    fetchSchedule().then((data) => { setSchedule(data); setLoaded((state) => ({ ...state, schedule: true })); }).catch(() => {});
+    fetchOutputs().then((data) => { setOutputs(data); setLoaded((state) => ({ ...state, outputs: true })); }).catch(() => {});
+    fetchAccounts().then((data) => { setAccounts(data); setLoaded((state) => ({ ...state, accounts: true })); }).catch(() => {});
+    fetchIdeas().then((data) => { setIdeas(data); setLoaded((state) => ({ ...state, ideas: true })); }).catch(() => {});
     fetchAnalyticsPlatforms().then((ps) => {
       setAnaPlats(ps);
       const cache = getWhoamiCache();
@@ -109,8 +112,10 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
       .finally(() => anaPending.current.delete(platform));
   };
 
-  const hour = new Date().getHours();
-  const greet = hour < 6 ? '夜深了' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : '晚上好';
+  const runtimeNote = gatewayStatus === 'connecting' ? '连接中…'
+    : apiDirect ? (gatewayStatus === 'connected' ? '文本对话 API 已配置 · 当前为仅聊天模式' : '文本对话 API 待配置')
+    : agentRuntime === 'openclaw' ? (gatewayStatus === 'connected' ? '创作网关已连接' : '创作网关未连接')
+    : gatewayStatus === 'connected' ? `${agentRuntime} CLI 已安装，模型可用性待实际对话验证` : `${agentRuntime} CLI 待配置`;
   const todayStr = new Date().toISOString().slice(0, 10);
   const upcoming = [...schedule]
     .filter((s) => s.date >= todayStr && s.status !== 'published')
@@ -129,51 +134,81 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
     { label: '去发布', page: 'publish', Icon: IconPublish },
   ];
 
-  const stats: { label: string; value: string; page: Page; Icon: typeof IconChat }[] = [
-    { label: '待做选题', value: String(pendingIdeas.length), page: 'ideas', Icon: IconIdea },
-    { label: '待发排期', value: String(upcoming.length), page: 'calendar', Icon: IconCalendar },
-    { label: '内容项目', value: String(outputs.length), page: 'outputs', Icon: IconOutputs },
-    { label: '已登录账号', value: `${loggedIn}/${accounts.length}`, page: 'accounts', Icon: IconAccounts },
+  const stats: { label: string; value: string; page: Page }[] = [
+    { label: '待做选题', value: loaded.ideas ? String(pendingIdeas.length) : '—', page: 'ideas' },
+    { label: '内容项目', value: loaded.outputs ? String(outputs.length) : '—', page: 'outputs' },
+    { label: '待发排期', value: loaded.schedule ? String(upcoming.length) : '—', page: 'calendar' },
+    { label: '已登录账号', value: loaded.accounts && accounts.length ? `${loggedIn}/${accounts.length}` : '—', page: 'accounts' },
+  ];
+  const exampleQuestions = [
+    '第一次整理家庭保障，该从哪开始？',
+    '拿到一份保险方案，先看什么？',
+    '保单里的这些词，你真的看懂了吗？',
   ];
 
   return (
-    <div className="page-scroll dash-page">
-      <div className="dash-hero">
-        <h1 className="page-title" style={{ fontSize: 26 }}>{greet} 👋</h1>
-        <p className="page-subtitle">
-          {apiDirect ? (gatewayStatus === 'connected' ? '仅聊天模式已配置，可开始对话。' : '请先配置仅聊天模式的模型 API。')
-            : agentRuntime !== 'openclaw' ? (gatewayStatus === 'connected'
-            ? `${agentRuntime} CLI 已安装；原生登录及模型可用性请发送消息验证。`
-            : `请先在服务器安装并配置 ${agentRuntime} CLI。`)
-            : gatewayStatus === 'connected' ? '一切就绪。' : '⚠ 网关未连接。'}
-          {persona ? ` 当前画像「${persona}」。` : ' 通用模式——指定画像效果更好。'}
-          从热点到发布，一站式搞定今天的内容。
-        </p>
-        <div className="dash-quick">
-          {quick.map((q) => (
-            <button key={q.page} className="dash-quick-btn" onClick={() => onNavigate(q.page)}>
-              <q.Icon size={16} /><span>{q.label}</span>
-            </button>
-          ))}
+    <div className="page-scroll dash-page mingya-dash">
+      <section className="my-hero">
+        <BannerBackground page="home" />
+        <div className="my-hero-copy">
+          <p className="my-eyebrow"><SectionMark>让专业，被更多人看见</SectionMark></p>
+          <h1>把专业，写进<br /><span className="my-title-line">每一篇笔记。<span className="my-title-stroke" aria-hidden="true" /></span></h1>
+          <p className="my-hero-description">从一个真实问题出发，写出有依据、有温度的保险内容。</p>
+          <div className="my-hero-actions">
+            <button className="btn btn-primary" onClick={() => onNavigate('chat')}><IconPlus size={23} />开始创作</button>
+            <button className="btn" onClick={() => onNavigate('profile')}><WorkspaceGlyph kind="user" size={23} />完善我的 IP</button>
+          </div>
         </div>
+      </section>
+
+      <section className="my-course-path" aria-label="课程主线">
+        <div className="my-course-step"><ReferenceArtwork page="home" crop={[328, 448, 60, 58]} className="my-course-icon" /><div><h2>被看见</h2><p>找到客户真正关心的问题</p></div></div>
+        <span className="my-course-dots" aria-hidden="true">··········</span>
+        <div className="my-course-step"><ReferenceArtwork page="home" crop={[743, 448, 60, 58]} className="my-course-icon" /><div><h2>被相信</h2><p>用真实经历与依据建立信任</p></div></div>
+        <span className="my-course-dots" aria-hidden="true">··········</span>
+        <div className="my-course-step"><ReferenceArtwork page="home" crop={[1159, 448, 60, 58]} className="my-course-icon" /><div><h2>被选择</h2><p>把专业判断写成一篇好内容</p></div></div>
+      </section>
+
+      <div className="my-business-grid">
+        <section className="my-question-card">
+          <h2><SectionMark>今天，从一个好问题开始</SectionMark></h2>
+          <p className="my-question-caption">问题示例 · 可继续补充素材</p>
+          <div className="my-example-questions">
+            {exampleQuestions.map((question, index) => <button key={question} onClick={() => onUseTopic(question)}>
+              <span className="my-question-number">{index + 1}</span><span>{question}</span><IconChevron size={17} />
+            </button>)}
+          </div>
+          <button className="my-topic-library" onClick={() => onNavigate('ideas')}><IconOutputs size={18} />去选题库</button>
+        </section>
+        <section className="my-space-card">
+          <h2><SectionMark>我的创作空间</SectionMark></h2>
+          <div className="my-space-stats">
+            {stats.map((stat) => <button key={stat.label} onClick={() => onNavigate(stat.page)}><span>{stat.label}</span><strong>{stat.value}</strong></button>)}
+          </div>
+          <ReferenceArtwork page="home" crop={[1139, 685, 224, 115]} className="my-notebook-art" />
+          <p className="my-space-caption">第一篇好内容，从这里开始</p>
+        </section>
       </div>
 
-      {/* 概览数字 */}
-      <div className="dash-stats">
-        {stats.map((s) => (
-          <button key={s.label} className="card card-hover dash-stat" onClick={() => onNavigate(s.page)}>
-            <span className="dash-stat-ic"><s.Icon size={18} /></span>
-            <span className="dash-stat-val">{s.value}</span>
-            <span className="dash-stat-label">{s.label}</span>
-          </button>
-        ))}
-      </div>
+      <section className="my-continue">
+        <h2><SectionMark>继续创作</SectionMark></h2>
+        <div className="my-continue-cards">
+          <button className="my-recent-content" onClick={() => onNavigate('outputs')}><IconFile size={25} /><span>{recent.length ? (recent[0].meta?.title || recent[0].name) : loaded.outputs ? '还没有内容草稿' : '内容草稿尚未读取'}</span></button>
+          <div className="my-start-note"><IconEdit size={25} /><span>把真实问题，变成你的第一篇笔记</span><button className="btn btn-primary" onClick={() => onNavigate('chat')}>开始写笔记<span aria-hidden="true">→</span></button></div>
+        </div>
+      </section>
+
+      <section className="my-toolbox">
+        <div className="my-toolbox-head"><h2><SectionMark>创作工具</SectionMark></h2><span>{persona ? `当前 IP · ${persona}` : '选择一个 IP，让表达更贴近你'}</span></div>
+        <div className="dash-quick">{quick.map((q) => <button key={q.page} className="dash-quick-btn" onClick={() => onNavigate(q.page)}><q.Icon size={16} /><span>{q.label}</span></button>)}</div>
+        <p className="my-runtime-note">{runtimeNote}</p>
+      </section>
 
       <div className="dash-grid">
         {/* 今日热点 */}
         <div className="card dash-card">
           <div className="dash-card-head">
-            <span><IconFire size={16} /> 今日热点</span>
+            <span><IconFire size={16} /> 热点参考</span>
             <button className="dash-more" onClick={() => onNavigate('trends')}>热点雷达 →</button>
           </div>
           {trends.length === 0 && <div className="dash-empty">热点加载中 / 需配置代理</div>}
@@ -195,7 +230,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconIdea size={16} /> 选题库 · 待做</span>
             <button className="dash-more" onClick={() => onNavigate('ideas')}>全部 →</button>
           </div>
-          {pendingIdeas.length === 0 && <div className="dash-empty">还没攒选题，去热点雷达收藏几个吧</div>}
+          {pendingIdeas.length === 0 && <div className="dash-empty">还没有待做选题。先记下一个读者真正关心的问题。</div>}
           {pendingIdeas.slice(0, 5).map((it) => (
             <div key={it.id} className="dash-idea" onClick={() => onUseTopic(it.title)} title="点击做成内容">
               <span className="dash-idea-title">{it.title}</span>
@@ -226,7 +261,7 @@ export default function DashboardPage({ persona, gatewayStatus, apiDirect, agent
             <span><IconOutputs size={16} /> 最近产物</span>
             <button className="dash-more" onClick={() => onNavigate('outputs')}>内容库 →</button>
           </div>
-          {recent.length === 0 && <div className="dash-empty">还没有产物，去对话生成第一条吧</div>}
+          {recent.length === 0 && <div className="dash-empty">还没有内容文件。开始创作，逐步整理你的第一篇笔记。</div>}
           {recent.map((g) => (
             <div key={g.name} className="dash-output" onClick={() => onNavigate('outputs')}>
               <span className="dash-output-name">{g.meta?.title || g.name}</span>

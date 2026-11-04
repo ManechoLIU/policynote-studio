@@ -1,0 +1,136 @@
+/* Binding reference: calendar.png. Scoped to the calendar route and its dialogs. */
+.calendar-page { padding:18px 14px 38px 22px; color:#10151d; }
+.calendar-page .mingya-calendar-banner { position:relative; min-height:118px; overflow:hidden; border-radius:16px; background:linear-gradient(180deg,#fef7ef,#fef8f2 50%,#fef9f4); }
+.calendar-page .mingya-calendar-banner-art { position:absolute; top:0; right:0; width:auto; max-width:none; height:100%; aspect-ratio:1253/118; object-fit:contain; mask-image:linear-gradient(to right,transparent,#000 60px); }
+.calendar-page .mingya-calendar-banner-copy { position:relative; padding:15px 30px; }
+.calendar-page .mingya-calendar-banner h1 { display:flex; align-items:center; gap:14px; margin:0; font-size:40px; line-height:1.35; font-weight:750; }
+.calendar-page .mingya-calendar-title-rule { width:6px; height:35px; border-radius:4px; background:#ff9e21; }
+.calendar-page .mingya-calendar-banner p { margin:2px 0 0 21px; font-size:18px; line-height:1.6; }
+.calendar-page .cal-suggest { display:flex; align-items:center; max-width:none; min-height:52px; gap:25px; margin:12px 0 22px; padding:9px 22px; border:1px solid #ffd5a7; border-radius:13px; background:#fff7ec; color:#15191f; font-size:16px; }
+.calendar-page .cal-suggest-head { justify-content:flex-start; flex:0 0 auto; gap:16px; padding-right:28px; border-right:1px solid #ffc493; font-size:19px; }
+.calendar-page .cal-opportunity-icon { color:#ff8500; font-size:29px; line-height:1; }
+.calendar-page .cal-suggest-content { flex:1; min-width:0; }
+.calendar-page .cal-suggest-content p { margin:0; }
+.calendar-page .cal-suggest-content ul { margin:0; padding-left:18px; }
+.calendar-page .cal-suggest-content li { color:inherit; }
+.calendar-page .cal-suggest > .icon-btn { flex:0 0 auto; font-size:26px; color:#5a6573; }
+.calendar-page .mingya-calendar-toolbar { display:flex; align-items:center; justify-content:space-between; gap:22px; flex-wrap:wrap; margin-bottom:23px; }
+.calendar-page .cal-nav { display:flex; align-items:center; gap:12px; }
+.calendar-page .cal-nav > .btn { gap:8px; min-height:49px; padding:0 17px; border:1px solid #dce1eb; border-radius:13px; background:#fff; font-size:18px; white-space:nowrap; }
+.calendar-page .cal-month-control { display:flex; align-items:center; gap:18px; min-height:49px; padding:5px 15px; border:1px solid #dce1eb; border-radius:13px; background:#fff; }
+.calendar-page .cal-this-month { padding:4px 15px; border:0; border-radius:8px; background:#fff0dc; color:#d26a00; font-size:17px; cursor:pointer; }
+.calendar-page .cal-month { position:relative; min-width:130px; font-size:18px; font-weight:500; }
+.calendar-page .cal-month-label { pointer-events:none; }
+.calendar-page .cal-month input { position:absolute; inset:0; width:100%; opacity:0; cursor:pointer; }
+.calendar-page .cal-month:focus-within { outline:2px solid #3976b5; outline-offset:4px; }
+.calendar-page .cal-legend-filter { display:flex; align-items:center; gap:12px; margin:0; color:#15191f; font-size:16px; white-space:nowrap; }
+.calendar-page .cal-filter-options { display:inline-flex; align-items:center; border:1px solid #dce1eb; border-radius:10px; background:#fff; }
+.calendar-page .cal-filter-options .chip { min-width:69px; min-height:36px; padding:6px 14px; border:1px solid transparent; border-radius:8px; background:transparent; font-size:15px; }
+.calendar-page .cal-filter-options .chip.active { border-color:#ff8b00; background:#fff8ee; color:#d66d00; }
+.calendar-page .cal-legend { display:flex; gap:18px; flex-wrap:wrap; max-width:none; margin:0; padding-left:25px; border-left:1px solid #dce1eb; color:#434b58; font-size:14px; }
+.calendar-page .cal-legend-item { gap:8px; }
+.calendar-page .cal-legend-swatch { width:10px; height:10px; }
+.calendar-page .mingya-calendar-table { overflow:hidden; border:1px solid #dbe1eb; border-radius:15px; background:rgba(255,255,255,.55); }
+.calendar-page .cal-grid-head { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); max-width:none; gap:0; margin:0; padding:14px 0; border-bottom:1px solid #dbe1eb; }
+.calendar-page .cal-wd { color:#141923; font-size:18px; font-weight:500; }
+.calendar-page .cal-grid { max-width:none; gap:0; margin:0; grid-template-columns:repeat(7,minmax(0,1fr)); }
+.calendar-page .cal-cell { min-width:0; height:85px; padding:8px 16px; gap:4px; border:0; border-right:1px solid #dbe1eb; border-bottom:1px solid #dbe1eb; border-radius:0; background:rgba(255,255,255,.3); box-shadow:none; }
+.calendar-page .cal-cell:nth-child(7n) { border-right:0; }
+.calendar-page .cal-cell:nth-last-child(-n+7) { border-bottom:0; }
+.calendar-page .cal-cell.dim { opacity:.5; background:#f7f9fd; }
+.calendar-page .cal-cell.dim .cal-daynum { color:#a1a8b5; }
+.calendar-page .cal-cell.today { position:relative; border:1px solid #ff1b46; border-radius:11px; background:#fff0f0; box-shadow:none; }
+.calendar-page .cal-daynum { color:#111722; font-size:18px; font-weight:400; }
+.calendar-page .cal-cell.today .cal-daynum { color:#111722; }
+.calendar-page .cal-event { min-width:0; font-size:11px; padding:1px 4px; }
+.calendar-page .cal-events { gap:2px; }
+.calendar-page .cal-src { font-size:9px; }
+.calendar-page .cal-more { padding:0 4px; font-size:10px; }
+.calendar-page .modal { max-height:calc(100dvh - 40px); overflow:auto; border:1px solid #dbe1eb; border-radius:16px; background:#fff; }
+.calendar-page .modal .field { font-size:14px; border-color:#dbe1eb; background:#fff; }
+.calendar-page :is(button,input,textarea):focus-visible { outline:2px solid #3476be; outline-offset:2px; }
+@media (min-width:901px) and (max-width:1450px), (min-width:1101px) and (max-height:820px) {
+  .calendar-page { padding:14px 18px 24px; }
+  .calendar-page .mingya-calendar-banner { min-height:94px; }
+  .calendar-page .mingya-calendar-banner-copy { padding:13px 24px; }
+  .calendar-page .mingya-calendar-banner h1 { font-size:30px; }
+  .calendar-page .mingya-calendar-banner p { font-size:14px; }
+  .calendar-page .mingya-calendar-title-rule { height:29px; }
+  .calendar-page .cal-suggest { min-height:42px; margin:10px 0 14px; padding:7px 17px; gap:18px; font-size:14px; }
+  .calendar-page .cal-suggest-head { gap:10px; padding-right:18px; font-size:16px; }
+  .calendar-page .mingya-calendar-toolbar { gap:12px; margin-bottom:15px; }
+  .calendar-page .cal-nav { gap:8px; }
+  .calendar-page .cal-nav > .btn { min-height:38px; padding:0 13px; font-size:14px; }
+  .calendar-page .cal-month-control { min-height:38px; padding:3px 10px; gap:12px; }
+  .calendar-page .cal-this-month { font-size:14px; padding:4px 10px; }
+  .calendar-page .cal-month { min-width:115px; font-size:14px; }
+  .calendar-page .cal-legend-filter { gap:8px; font-size:14px; }
+  .calendar-page .cal-filter-options .chip { min-width:50px; min-height:31px; padding:4px 11px; font-size:13px; }
+  .calendar-page .cal-legend { gap:12px; padding-left:15px; font-size:12px; }
+  .calendar-page .cal-grid-head { padding:10px 0; }
+  .calendar-page .cal-wd { font-size:14px; }
+  .calendar-page .cal-cell { height:66px; padding:5px 12px; }
+  .calendar-page .cal-daynum { font-size:14px; }
+}
+@media (max-width:900px) {
+  .calendar-page { padding:14px; }
+  .calendar-page .mingya-calendar-banner h1 { font-size:30px; }
+  .calendar-page .mingya-calendar-banner p { font-size:14px; }
+  .calendar-page .cal-suggest { align-items:flex-start; gap:12px; padding:10px 12px; font-size:13px; }
+  .calendar-page .cal-suggest-head { gap:8px; padding-right:12px; font-size:14px; }
+  .calendar-page .cal-nav > .btn,.calendar-page .cal-month,.calendar-page .cal-this-month { font-size:13px; }
+  .calendar-page .cal-nav { gap:6px; }
+  .calendar-page .cal-month-control { padding:4px 8px; gap:8px; }
+  .calendar-page .cal-month { min-width:105px; }
+  .calendar-page .cal-legend { padding-left:0; border:0; }
+  .calendar-page .cal-cell { height:85px; padding:5px; }
+  .calendar-page .cal-daynum { font-size:14px; }
+  .calendar-page .cal-wd { font-size:14px; }
+  .calendar-page .cal-event { font-size:10px; }
+}
+/* Dark theme only. Warm banner art and its dark ink stay as authored. */
+:root[data-theme='dark'] .calendar-page { color: var(--text); }
+:root[data-theme='dark'] .calendar-page .mingya-calendar-banner-copy { color: #10151d; }
+:root[data-theme='dark'] .calendar-page .cal-suggest { border-color: var(--brand-gold); background: var(--brand-gold-soft); color: var(--text); }
+:root[data-theme='dark'] .calendar-page .cal-suggest-head { border-right-color: var(--brand-gold); }
+:root[data-theme='dark'] .calendar-page .cal-opportunity-icon,
+:root[data-theme='dark'] .calendar-page .cal-this-month,
+:root[data-theme='dark'] .calendar-page .cal-filter-options .chip.active { color: var(--brand-gold); }
+:root[data-theme='dark'] .calendar-page .cal-suggest > .icon-btn,
+:root[data-theme='dark'] .calendar-page .cal-legend { color: var(--text-secondary); }
+:root[data-theme='dark'] .calendar-page .cal-nav > .btn,
+:root[data-theme='dark'] .calendar-page .cal-month-control,
+:root[data-theme='dark'] .calendar-page .cal-filter-options { border-color: var(--border); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .calendar-page .cal-this-month,
+:root[data-theme='dark'] .calendar-page .cal-filter-options .chip.active { border-color: var(--brand-gold); background: var(--brand-gold-soft); }
+:root[data-theme='dark'] .calendar-page .cal-month:focus-within,
+:root[data-theme='dark'] .calendar-page :is(button,input,textarea):focus-visible { outline-color: var(--brand-blue); }
+:root[data-theme='dark'] .calendar-page .cal-legend,
+:root[data-theme='dark'] .calendar-page .mingya-calendar-table,
+:root[data-theme='dark'] .calendar-page .cal-grid-head,
+:root[data-theme='dark'] .calendar-page .cal-cell,
+:root[data-theme='dark'] .calendar-page .modal,
+:root[data-theme='dark'] .calendar-page .modal .field { border-color: var(--border); }
+:root[data-theme='dark'] .calendar-page .mingya-calendar-table,
+:root[data-theme='dark'] .calendar-page .cal-cell,
+:root[data-theme='dark'] .calendar-page .modal,
+:root[data-theme='dark'] .calendar-page .modal .field { background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .calendar-page .cal-wd,
+:root[data-theme='dark'] .calendar-page .cal-daynum,
+:root[data-theme='dark'] .calendar-page .cal-cell.today .cal-daynum,
+:root[data-theme='dark'] .calendar-page .cal-legend-filter { color: var(--text); }
+:root[data-theme='dark'] .calendar-page .cal-cell.dim { background: var(--surface-2); }
+:root[data-theme='dark'] .calendar-page .cal-cell.dim .cal-daynum { color: var(--text-tertiary); }
+:root[data-theme='dark'] .calendar-page .cal-cell.today { border-color: var(--accent-start); background: var(--accent-soft); }
+@media (max-width:760px) {
+  .calendar-page .mingya-calendar-banner-art { height:70px; width:auto; right:0; bottom:0; top:auto; aspect-ratio:1253/118; }
+  .calendar-page .mingya-calendar-banner { min-height:118px; }
+  .calendar-page .mingya-calendar-banner-copy { box-sizing:border-box; width:190px; max-width:190px; padding:14px 18px; }
+  .calendar-page .mingya-calendar-banner h1 { white-space:nowrap; flex-wrap:nowrap; font-size:30px; line-height:1.35; }
+  .calendar-page .mingya-calendar-banner p { max-width:120px; margin:2px 0 0 20px; font-size:14px; line-height:1.6; white-space:normal; }
+  .calendar-page .cal-nav { width:100%; min-width:0; gap:6px; }
+  .calendar-page .cal-nav > .btn { flex:0 0 84px; padding:0 8px; font-size:13px; gap:4px; white-space:nowrap; min-height:36px; }
+  .calendar-page .cal-month-control { flex:1; min-width:0; padding:4px 6px; gap:6px; }
+  .calendar-page .cal-this-month { flex:0 0 auto; white-space:nowrap; padding:3px 6px; font-size:13px; }
+  .calendar-page .cal-month { min-width:0; font-size:13px; white-space:nowrap; }
+}

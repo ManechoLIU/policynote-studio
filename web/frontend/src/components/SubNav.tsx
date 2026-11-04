@@ -1,36 +1,32 @@
 import type { Page } from './Sidebar';
-import type { ComponentType } from 'react';
-import { IconDashboard, IconFire, IconIdea, IconCalendar, IconPublish, IconSkills } from './icons';
+import '../styles/mingya-subnav.css';
 
 interface SubNavProps {
   current: Page;
   onNavigate: (page: Page) => void;
 }
 
-const TOOLS: { page: Page; Icon: ComponentType<{ size?: number }>; label: string }[] = [
-  { page: 'discovery', Icon: IconIdea, label: '外部选题' },
-  { page: 'trends', Icon: IconFire, label: '热点雷达' },
-  { page: 'ideas', Icon: IconIdea, label: '选题库' },
-  { page: 'calendar', Icon: IconCalendar, label: '内容日历' },
-  { page: 'publish', Icon: IconPublish, label: '发布中心' },
-  { page: 'breakdown', Icon: IconSkills, label: '爆款拆解' },
+const TOOLS: { page: Page; label: string }[] = [
+  { page: 'discovery', label: '外部选题' },
+  { page: 'trends', label: '热点雷达' },
+  { page: 'ideas', label: '选题库' },
+  { page: 'calendar', label: '内容日历' },
+  { page: 'publish', label: '发布中心' },
+  { page: 'breakdown', label: '爆款拆解' },
 ];
 
 export default function SubNav({ current, onNavigate }: SubNavProps) {
   return (
-    <div className="subnav">
-      <button className="subnav-back" onClick={() => onNavigate('dashboard')} title="返回工作台">
-        <IconDashboard size={15} /> 工作台
-      </button>
-      <span className="subnav-div" />
+    <nav className="subnav reference-subnav" aria-label="创作工具导航">
       <div className="subnav-tabs">
-        {TOOLS.map(({ page, Icon, label }) => (
+        {TOOLS.map(({ page, label }) => (
           <button key={page} className={`subnav-tab ${current === page ? 'active' : ''}`}
+            aria-current={current === page ? 'page' : undefined}
             onClick={() => onNavigate(page)}>
-            <Icon size={14} />{label}
+            {label}{current === page && <span className="subnav-active-rule" aria-hidden="true" />}
           </button>
         ))}
       </div>
-    </div>
+    </nav>
   );
 }

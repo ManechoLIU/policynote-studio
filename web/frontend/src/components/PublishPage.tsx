@@ -6,15 +6,22 @@ import {
 import type { AccountItem, OutputFile } from '../lib/api';
 import { loadPublishDraft, savePublishDraft } from '../lib/store';
 import { renderMarkdown } from '../lib/sanitize';
-import { IconPublish, IconCopy, IconCheck, IconCalendar, IconSkills, IconEdit, IconStop, IconTrash } from './icons';
+import { ReferenceArtwork } from './MingyaPrimitives';
+import '../styles/mingya-publish.css';
+import { IconPublish, IconCopy, IconCheck, IconCalendar, IconSkills, IconEdit, IconStop, IconTrash, IconImage, IconVideo } from './icons';
 
 interface PublishPageProps {
   persona: string;
 }
 
 // 平台列表须与后端 LOGIN_RUNNERS 对齐（有登录/发布链路的才列）
+const PLATFORM_ART: Record<string, readonly [number, number, number, number]> = {
+  xiaohongshu: [298,351,78,76], 'wechat-oa': [928,351,78,76], douyin: [298,522,78,76], 'weixin-channels': [928,522,80,76], bilibili: [298,691,78,76], zhihu: [928,691,80,76], kuaishou: [298,861,78,76],
+};
+const DISPLAY_ORDER = ['xiaohongshu','douyin','wechat-oa','weixin-channels','bilibili','zhihu','kuaishou'];
+
 const PLATFORMS: { key: string; label: string; titleLimit?: number; bodyLimit: number; hint: string }[] = [
-  { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, hint: '标题≤20，正文≤1000，重情绪+话题标签' },
+  { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, hint: '标题≤20，正文≤1000，重情绪+话题标签；仅存小红书平台草稿，未公开发布' },
   { key: 'douyin', label: '抖音', titleLimit: 55, bodyLimit: 55, hint: '文案≤55，前几字是钩子' },
   { key: 'kuaishou', label: '快手', titleLimit: 30, bodyLimit: 1000, hint: '视频或图片(图文)，标题≤30，需附媒体' },
   { key: 'weixin-channels', label: '视频号', bodyLimit: 1000, hint: '需附视频，短描述+话题标签，微信扫码登录' },
@@ -26,6 +33,7 @@ const LABEL2KEY = Object.fromEntries(PLATFORMS.map((p) => [p.label, p.key]));
 
 // 能一键发布的平台（有后端 publisher）
 const PUBLISHABLE = new Set(['xiaohongshu', 'douyin', 'kuaishou', 'weixin-channels', 'zhihu', 'bilibili', 'wechat-oa']);
+const DRAFT_PLATFORMS = new Set(['xiaohongshu', 'wechat-oa']);
 // 必须附带媒体的平台（无媒体发不了）——公众号需要一张封面图，也计入
 const MEDIA_REQUIRED = new Set(['xiaohongshu', 'douyin', 'kuaishou', 'weixin-channels', 'bilibili', 'wechat-oa']);
 // 只能发视频的平台（抖音/视频号/B站：图文不走此链路，必须视频）
@@ -61,6 +69,9 @@ export default function PublishPage({ persona }: PublishPageProps) {
   const [mediaFiles, setMediaFiles] = useState<OutputFile[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<string[]>([]);
   const [showPicker, setShowPicker] = useState(false);
+  const [previewPlatform, setPreviewPlatform] = useState('');
+  const [mediaKind, setMediaKind] = useState<'image' | 'video' | 'all'>('all');
+
   const [pub, setPub] = useState<Record<string, PubState>>({});
   const [publishing, setPublishing] = useState(false);
   // 发布时的短信验证窗口（抖音风控条件触发；没触发就不弹）
@@ -90,6 +101,8 @@ export default function PublishPage({ persona }: PublishPageProps) {
     }).catch(() => { /* 忽略 */ });
   }, []);
 
+  const activePreview = platforms.includes(previewPlatform) && PLATFORMS.some((platform) => platform.key === previewPlatform) ? previewPlatform : PLATFORMS.find((platform) => platforms.includes(platform.key))?.key || '';
+  const previewMedia = mediaFiles.find((file) => file.path === selectedMedia[0]);
   const loginOf = (key: string) => accounts.find((a) => a.platform === key)?.loggedIn ?? false;
 
   const toggle = (k: string) =>
@@ -173,7 +186,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
     } finally { setChecking(false); }
   };
 
-  // D. 一键发布（真发布，二次确认）
+  // D. 平台提交（小红书/公众号仅存平台草稿，其他平台公开发布；二次确认）
   const publishAll = async () => {
     if (empty || publishing || checking) return;
     const targets = PLATFORMS.filter((p) => platforms.includes(p.key) && PUBLISHABLE.has(p.key));
@@ -185,14 +198,17 @@ export default function PublishPage({ persona }: PublishPageProps) {
     try {
       setCheckResult(await performPrecheck());
     } catch (e) {
-      setCheckResult(`预检失败：${e instanceof Error ? e.message : '未知错误'}\n\n预检仅用于提醒，不会阻止你继续发布。`);
+      setCheckResult(`预检失败：${e instanceof Error ? e.message : '未知错误'}\n\n预检仅用于提醒，不会阻止你继续提交。`);
     } finally {
       setChecking(false);
     }
+    const publicTargets = targets.filter((target) => !DRAFT_PLATFORMS.has(target.key));
+    const draftTargets = targets.filter((target) => DRAFT_PLATFORMS.has(target.key));
     const okToSend = window.confirm(
-      `发布前预检已执行，结果已显示在页面中。人设评分只做提醒，不会阻止发布。\n\n` +
-      `即将【真实发布】到：${targets.map((t) => t.label).join('、')}。\n` +
-      `这会公开发布到你的账号，确定继续？`);
+      `发布前预检已执行，结果已显示在页面中。人设评分只做提醒，不会阻止提交。\n\n` +
+      (publicTargets.length ? `公开发布：${publicTargets.map((target) => target.label).join('、')}。\n` : '') +
+      (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。\n` : '') +
+      `确定继续？`);
     if (!okToSend) return;
 
     setPublishing(true);
@@ -209,10 +225,22 @@ export default function PublishPage({ persona }: PublishPageProps) {
         setPub((r) => ({ ...r, [t.key]: { status: 'fail', msg: `${t.label}只能发视频，请从内容库选一个视频` } }));
         continue;
       }
-      setPub((r) => ({ ...r, [t.key]: { status: 'publishing', msg: '发布中…可能需 1-2 分钟' } }));
+      setPub((r) => ({ ...r, [t.key]: { status: 'publishing', msg: DRAFT_PLATFORMS.has(t.key) ? '保存平台草稿中…可能需 1-2 分钟' : '发布中…可能需 1-2 分钟' } }));
       try {
         const res = await publishNow(t.key, { title, body: effective(t.key), media: selectedMedia, tags });
-        if (res.async) {
+        if (t.key === 'xiaohongshu') {
+          const saved = res.ok === true && res.outcome === 'draft_saved' && res.published === false && !res.async;
+          const failureMessage = res.ok === false
+            ? `${typeof res.message === 'string' && res.message.trim() ? res.message : '保存小红书草稿失败'}。请先检查创作者后台草稿，勿重复提交`
+            : '未确认保存至小红书草稿，请检查平台草稿箱';
+          setPub((r) => ({ ...r, [t.key]: saved
+            ? { status: 'ok', msg: '已保存至小红书草稿，未公开发布' }
+            : { status: 'fail', msg: failureMessage } }));
+        } else if (t.key === 'wechat-oa') {
+          setPub((r) => ({ ...r, [t.key]: res.ok && !res.async
+            ? { status: 'ok', msg: '已保存至公众号草稿箱，未公开发布' }
+            : { status: 'fail', msg: res.detail || res.message || '保存公众号草稿失败' } }));
+        } else if (res.async) {
           // 抖音：异步发布，轮询状态；风控触发短信墙时弹输入框（条件触发，没触发就直接跑完）
           await pollAsyncPublish(t.key, t.label);
         } else {
@@ -228,7 +256,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
       }
     }
     setPublishing(false);
-    showToast('发布流程结束，见各平台卡片状态');
+    showToast('提交流程结束，见各平台卡片状态');
   };
 
   // 异步发布轮询（抖音）：直到 success/error；遇 sms_required/verifying 弹短信窗口
@@ -287,16 +315,24 @@ export default function PublishPage({ persona }: PublishPageProps) {
       title: title.trim() || effective(key).slice(0, 20), date: d.toISOString().slice(0, 10),
       platform: PLATFORMS.find((p) => p.key === key)?.label || '', time: '', status: 'draft', note: effective(key),
     });
-    showToast('已存为草稿并加入今天的日历');
+    showToast('已存为本地排期草稿并加入今天的日历，未保存至平台草稿箱');
   };
 
   const canPublish = platforms.some((k) => PUBLISHABLE.has(k));
+  const targets = PLATFORMS.filter((platform) => platforms.includes(platform.key) && PUBLISHABLE.has(platform.key));
+  const hasDraftTarget = targets.some((platform) => DRAFT_PLATFORMS.has(platform.key));
+  const hasPublicTarget = targets.some((platform) => !DRAFT_PLATFORMS.has(platform.key));
+  const submitLabel = targets.length === 1 && targets[0].key === 'xiaohongshu'
+    ? '存小红书草稿'
+    : targets.length === 1 && targets[0].key === 'wechat-oa'
+    ? '存公众号草稿'
+    : hasDraftTarget ? hasPublicTarget ? '提交所选平台' : '存平台草稿' : '一键发布';
 
   return (
     <div className="publish-page">
       <div className="publish-editor">
         <h1 className="page-title"><IconPublish size={21} /> 发布中心</h1>
-        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 一键真发布。</p>
+        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 提交。小红书与公众号仅存平台草稿，其他平台公开发布。</p>
 
         <label className="field-label">标题</label>
         <input className="field" value={title} placeholder="标题（部分平台需要）"
@@ -310,22 +346,12 @@ export default function PublishPage({ persona }: PublishPageProps) {
         <input className="field" value={tags} placeholder="AI,职场,干货"
           onChange={(e) => setTags(e.target.value)} />
 
-        <label className="field-label">发布平台</label>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          {PLATFORMS.map((p) => (
-            <button key={p.key} className={`chip ${platforms.includes(p.key) ? 'active' : ''}`}
-              onClick={() => toggle(p.key)}>{p.label}</button>
-          ))}
-        </div>
-
         <label className="field-label" style={{ marginTop: 14 }}>
           媒体附件 {selectedMedia.length > 0 && <span className="pv-badge">{selectedMedia.length} 个</span>}
           <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: 12 }}>（小红书/抖音/快手/微信视频号/B站必需，从内容库选；抖音、视频号、B站须为视频）</span>
         </label>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button className="btn btn-sm" onClick={() => setShowPicker((v) => !v)}>
-            <IconSkills size={13} /> {showPicker ? '收起' : '选择媒体'}
-          </button>
+          <div className="mingya-media-choices"><button type="button" onClick={() => { setMediaKind('image'); setShowPicker((value) => mediaKind === 'image' ? !value : true); }}><IconImage size={25} /><strong>选择图片</strong><span>从内容库选择图片</span></button><button type="button" onClick={() => { setMediaKind('video'); setShowPicker((value) => mediaKind === 'video' ? !value : true); }}><IconVideo size={25} /><strong>选择视频</strong><span>从内容库选择视频</span></button></div>
           {selectedMedia.map((path) => (
             <div key={path} className="media-chip" onClick={() => toggleMedia(path)} title="点击移除">
               {mediaFiles.find((f) => f.path === path)?.kind === 'image'
@@ -337,7 +363,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
         {showPicker && (
           <div className="media-grid">
             {mediaFiles.length === 0 && <div className="dash-empty">内容库暂无图片/视频</div>}
-            {mediaFiles.slice(0, 40).map((f) => (
+            {mediaFiles.filter((file) => mediaKind === 'all' || file.kind === mediaKind).slice(0, 40).map((f) => (
               <div key={f.path}
                 className={`media-cell ${selectedMedia.includes(f.path) ? 'sel' : ''}`}
                 onClick={() => toggleMedia(f.path)} title={f.path}>
@@ -350,32 +376,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
           </div>
         )}
 
-        <div className="publish-actions">
-          {adapting ? (
-            <button className="btn btn-sm" onClick={stopAdapt}><IconStop size={13} /> 停止生成</button>
-          ) : (
-            <button className="btn btn-sm btn-primary" disabled={empty || platforms.length === 0} onClick={adapt}>
-              <IconSkills size={14} /> 一键适配各平台
-            </button>
-          )}
-          <button className="btn btn-sm" disabled={empty || checking || adapting} onClick={check}>
-            <IconCheck size={14} /> {checking ? '预检中…' : '发布前预检'}
-          </button>
-          <button className="btn btn-sm" disabled={empty} onClick={() => addToCalendar(platforms[0] || 'xiaohongshu')}>
-            <IconCalendar size={14} /> 存草稿并排期
-          </button>
-          <button className="btn btn-sm btn-primary" disabled={empty || publishing || checking || !canPublish}
-            title={canPublish ? '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}
-            onClick={publishAll}>
-            <IconPublish size={14} /> {publishing ? '发布中…' : '一键发布'}
-          </button>
-          <button className="btn btn-sm btn-ghost" disabled={empty || adapting}
-            onClick={() => { setTitle(''); setBody(''); setTags(''); setOverrides({}); setCheckResult(''); setPub({}); showToast('已清空'); }}>
-            <IconTrash size={13} /> 清空
-          </button>
-        </div>
-        {adapting && <div className="adapt-hint"><span className="live-pulse" />AI 正在逐字改写各平台版本…可随时停止。</div>}
-        <p className="publish-saved-note">草稿已自动保存，切换页面/刷新回来内容都在。一键发布仅对「已登录 + 媒体齐全」的平台生效。</p>
+        <p className="publish-saved-note">本地编辑草稿已自动保存，切换页面/刷新回来内容都在，不等于平台草稿。提交仅对「已登录 + 媒体齐全」的平台生效。</p>
         {checkResult && (
           <div className="panel" style={{ marginTop: 14 }}>
             <div className="panel-title"><IconCheck size={14} /> 发布前预检</div>
@@ -385,6 +386,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
       </div>
 
       <div className="publish-previews">
+<section className="mingya-publish-platforms"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />发布平台 <small>（可多选）</small></h2><div className="mingya-platform-options">{[...PLATFORMS].sort((a,b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key)).map((p) => <button key={p.key} type="button" className={`mingya-platform-option ${platforms.includes(p.key) ? 'selected' : ''}`} aria-pressed={platforms.includes(p.key)} onClick={() => toggle(p.key)}><ReferenceArtwork page="accounts" crop={PLATFORM_ART[p.key]} className="mingya-publish-platform-icon" /><span className="mingya-platform-name"><span className="mingya-checkbox" aria-hidden="true">{platforms.includes(p.key) ? '✓' : ''}</span>{p.key === 'wechat-oa' ? '微信公众号' : p.label}</span><span className="mingya-platform-status" title={pub[p.key]?.msg}>{pub[p.key]?.msg || (loginOf(p.key) ? '已登录' : '未登录')}</span></button>)}</div></section><div className="mingya-publish-right-body"><section className="mingya-publish-preview-section"><div className="mingya-preview-heading"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />预览</h2><label>切换平台：<select aria-label="切换预览平台" value={activePreview} disabled={!platforms.length} onChange={(event) => setPreviewPlatform(event.target.value)}>{!platforms.length && <option value="">未选择</option>}{PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label></div>
         {platforms.length === 0 && <div className="dash-empty">选择至少一个平台查看预览</div>}
         {PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => {
           const text = effective(p.key);
@@ -395,7 +397,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
           const publishable = PUBLISHABLE.has(p.key);
           const logged = loginOf(p.key);
           return (
-            <div key={p.key} className={`card pv-card pv-${p.key}`}>
+            <div key={p.key} hidden={p.key !== activePreview} className={`card pv-card pv-${p.key}`}>
               <div className="pv-head">
                 <span className="pv-plat">
                   {p.label}
@@ -406,7 +408,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
                 </span>
                 <span className={`pv-count ${over ? 'over' : ''}`}>{text.length}/{p.bodyLimit}</span>
               </div>
-              <div className="pv-body">
+              <div className="pv-body"><div className="mingya-publish-cover">{previewMedia ? (previewMedia.kind === 'image' ? <img src={mediaUrl(previewMedia.path)} alt={previewMedia.name} /> : <video src={mediaUrl(previewMedia.path)} controls preload="metadata" />) : <><IconImage size={44} /><span>暂无封面，发布后将展示所选配图</span></>}</div>
                 {p.titleLimit != null && (
                   <div className={`pv-title ${titleOver ? 'over' : ''}`}>{title || <span className="pv-ph">标题…</span>}</div>
                 )}
@@ -435,6 +437,32 @@ export default function PublishPage({ persona }: PublishPageProps) {
             </div>
           );
         })}
+        </section><aside className="mingya-publish-settings"><section className="mingya-publish-review"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />审核设置</h2><p>发布前会检查内容与人设一致性，并在真实提交前再次确认。</p><p>人工逐版本审核与导出请切换“人工审核发布”。</p></section><section className="mingya-publish-personalization"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />平台个性化设置</h2>{[...PLATFORMS].sort((a,b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key)).map((p) => <div key={p.key} className="mingya-personalization-row"><ReferenceArtwork page="accounts" crop={PLATFORM_ART[p.key]} className="mingya-personalization-icon" /><span>{p.key === 'wechat-oa' ? '微信公众号' : p.label}</span><button type="button" disabled={!platforms.includes(p.key)} onClick={() => { setPreviewPlatform(p.key); setEditing(p.key); }}>{platforms.includes(p.key) ? '单独设置 ›' : '先选平台'}</button></div>)}</section></aside></div>
+        <div className="publish-actions">
+          {adapting ? (
+            <button className="btn btn-sm" onClick={stopAdapt}><IconStop size={13} /> 停止生成</button>
+          ) : (
+            <button className="btn btn-sm btn-primary" disabled={empty || platforms.length === 0} onClick={adapt}>
+              <IconSkills size={14} /> 一键适配各平台
+            </button>
+          )}
+          <button className="btn btn-sm" disabled={empty || checking || adapting} onClick={check}>
+            <IconCheck size={14} /> {checking ? '预检中…' : '发布前预检'}
+          </button>
+          <button className="btn btn-sm" disabled={empty} onClick={() => addToCalendar(platforms[0] || 'xiaohongshu')}>
+            <IconCalendar size={14} /> 存本地草稿并排期
+          </button>
+          <button className="btn btn-sm btn-primary" disabled={empty || publishing || checking || !canPublish}
+            title={canPublish ? hasDraftTarget ? '小红书与公众号仅存平台草稿，其他所选平台公开发布' : '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}
+            onClick={publishAll}>
+            <IconPublish size={14} /> {publishing ? hasDraftTarget ? '提交中…' : '发布中…' : submitLabel}
+          </button>
+          <button className="btn btn-sm btn-ghost" disabled={empty || adapting}
+            onClick={() => { setTitle(''); setBody(''); setTags(''); setOverrides({}); setCheckResult(''); setPub({}); showToast('已清空'); }}>
+            <IconTrash size={13} /> 清空
+          </button>
+        </div>
+        {adapting && <div className="adapt-hint"><span className="live-pulse" />AI 正在逐字改写各平台版本…可随时停止。</div>}
       </div>
 
       {toast && <div className="toast ok"><span className="toast-icon">✓</span>{toast}</div>}

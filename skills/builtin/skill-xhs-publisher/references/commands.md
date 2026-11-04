@@ -38,24 +38,24 @@ python skills/shared/scripts/xhs_publish.py plan \
 # 打印：标题长度校验 / 媒体 / 话题 / 7 步流程
 ```
 
-## 图文发布
+## 图文保存为平台草稿
 
 ```bash
-# dry-run（默认，不加 --exec 不会真发）
+# dry-run（默认，不加 --exec 不会提交到平台）
 python skills/shared/scripts/xhs_publish.py publish \
   --title "标题" --content "正文" --images /abs/a.jpg,/abs/b.jpg --tags "AI,教程"
 
-# 真正发布（首次建议 --headed 观察选择器，OK 后去掉转 headless）
-python skills/shared/scripts/xhs_publish.py publish --exec --headed \
+# 真实保存草稿，不会公开发布（省略 --draft 也只能存草稿）
+python skills/shared/scripts/xhs_publish.py publish --exec --draft --headed \
   --title "标题" --content "正文" --images /abs/a.jpg,/abs/b.jpg --tags "AI,教程"
 ```
 
-## 视频发布
+## 视频保存为平台草稿
 
 ```bash
-python skills/shared/scripts/xhs_publish.py publish-video --exec --headed \
+python skills/shared/scripts/xhs_publish.py publish-video --exec --draft --headed \
   --title "标题" --content "正文" --video /abs/clip.mp4 --tags "vlog"
-# 视频上传后脚本等发布按钮可点击（最长 10min = 平台处理完成）再提交
+# 等待编辑器就绪后，仅点击明确的草稿保存按钮；无法识别时停止报错
 ```
 
 ## 代理与登录态
@@ -76,12 +76,13 @@ python skills/shared/scripts/xhs_publish.py publish-video --exec --headed \
 | `--images` | 图片路径，逗号分隔（图文发布；绝对路径） |
 | `--video` | 视频路径（视频发布；绝对路径） |
 | `--tags` | 话题，逗号分隔（如 `AI,教程`；脚本走话题联想真绑定） |
-| `--exec` | 真正发布（缺省为 dry-run） |
+| `--exec` | 真实保存平台草稿（缺省为 dry-run），不公开发布 |
+| `--draft` | 显式表示只存草稿；省略也不会公开发布 |
 | `--headed` | 有头模式（首次校验选择器） |
 
 ## 排障
 
 - **未登录**：先 `login` 扫码。
 - **步骤超时 / 找不到元素**：小红书改版了——改 `xhs_publish.py` 顶部 `SELECTORS` 字典（单点维护，每条标了参考源），先 `--headed` 观察定位。
-- **发布未确认成功**：脚本以「URL 离开 /publish/publish」判成功；若卡在发布页说明平台校验未过（标题/正文超限、内容违规等），按提示排查。
+- **草稿未确认成功**：必须出现明确的草稿保存成功提示，并输出 `draft_saved` / `published:false` JSON收据；URL跳转不算成功。先在创作者后台检查草稿，勿盲目重复提交。网页草稿不保证同步到手机App。
 - **自检**：`python skills/shared/scripts/xhs_publish.py selftest`（离线，验选择器字典/标题算法/参数解析）。

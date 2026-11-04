@@ -1,0 +1,151 @@
+[
+  {
+    "id": "home",
+    "path": "design-references/home.png",
+    "runtime_path": "web/static/mingya-reference/home.png",
+    "sha256": "9387f6bfafbb2791f7798920f1cfa27f444ebc1e4715504f560c5ae8e610ae51",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding",
+    "runtime_use": "整块背景清空业务文案位后叠加HTML；原图logo/小图标可裁切；来源矩形见mingya-banners/provenance.json",
+    "runtime_banner": "web/static/mingya-banners/home.png"
+  },
+  {
+    "id": "chat",
+    "path": "design-references/chat.png",
+    "runtime_path": "web/static/mingya-reference/chat.png",
+    "sha256": "c1ad2881bae2061d77edbe58c60d8694d58401cd1f2cb322fdae5502d20d5cad",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding",
+    "runtime_use": "整块背景清空业务文案位后叠加HTML；原图logo/小图标可裁切；来源矩形见mingya-banners/provenance.json",
+    "runtime_banner": "web/static/mingya-banners/chat.png"
+  },
+  {
+    "id": "skills",
+    "path": "design-references/skills.png",
+    "runtime_path": "web/static/mingya-reference/skills.png",
+    "sha256": "4362880a143d0adc3bed65db5bd7e9892c751e9f97594b5592e68da142e060b7",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding",
+    "runtime_use": "整块背景清空业务文案位后叠加HTML；原图logo/小图标可裁切；来源矩形见mingya-banners/provenance.json",
+    "runtime_banner": "web/static/mingya-banners/skills.png"
+  },
+  {
+    "id": "outputs",
+    "path": "design-references/outputs.png",
+    "runtime_path": "web/static/mingya-reference/outputs.png",
+    "sha256": "2219139e109155a65370dda2248db2281644ec0fd6df59e33e7d2c387fa71102",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding",
+    "runtime_use": "整块背景清空业务文案位后叠加HTML；原图logo/小图标可裁切；来源矩形见mingya-banners/provenance.json",
+    "runtime_banner": "web/static/mingya-banners/outputs.png"
+  },
+  {
+    "id": "accounts",
+    "path": "design-references/accounts.png",
+    "runtime_path": "web/static/mingya-reference/accounts.png",
+    "sha256": "364ea696ac53b5793dd9e34463f6495081395d41c73436adc8b3cb5f4ccc2df4",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding",
+    "runtime_use": "整块背景清空业务文案位后叠加HTML；原图logo/小图标可裁切；来源矩形见mingya-banners/provenance.json",
+    "runtime_banner": "web/static/mingya-banners/accounts.png"
+  },
+  {
+    "id": "profile",
+    "path": "design-references/profile.png",
+    "runtime_path": "web/static/mingya-reference/profile.png",
+    "sha256": "29ad9fdff986ae8d4dc52aaf9efcec16be2e3ccebc6b2bec80fe450d1d1f1b9f",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding",
+    "runtime_use": "整块背景清空业务文案位后叠加HTML；原图logo/小图标可裁切；来源矩形见mingya-banners/provenance.json",
+    "runtime_banner": "web/static/mingya-banners/profile.png"
+  },
+  {
+    "id": "settings",
+    "path": "design-references/settings.png",
+    "sha256": "026c5d0757367e62a95e3cdb6da913c60d7eafffe11ad410d510523947ae0a33",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding-derived",
+    "runtime_use": "派生视觉基线已实施并经独立UIUX审查；保留真实业务能力，映射合同见strict-review/derived-baseline.md",
+    "review": "outputs/明亚工作台UI设计/strict-review/derived-responsive-review.md"
+  },
+  {
+    "id": "calendar",
+    "path": "design-references/calendar.png",
+    "sha256": "5411918213c859fcd71a29dd4c6b03a3466bd176021edc358bba778ec21282a0",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding-derived",
+    "runtime_use": "派生视觉基线已实施并经独立UIUX审查；保留真实业务能力，映射合同见strict-review/derived-baseline.md",
+    "review": "outputs/明亚工作台UI设计/strict-review/derived-responsive-review.md",
+    "runtime_banner": "web/static/mingya-derived/calendar-banner.png"
+  },
+  {
+    "id": "publish",
+    "path": "design-references/publish.png",
+    "sha256": "45968b4e34b46975748a0a44ef64c06e70c743d07cc2bdf1077f864b98827bbf",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding-derived",
+    "runtime_use": "派生视觉基线已实施并经独立UIUX审查；保留真实业务能力，映射合同见strict-review/derived-baseline.md",
+    "review": "outputs/明亚工作台UI设计/strict-review/derived-responsive-review.md"
+  },
+  {
+    "id": "skill-detail",
+    "path": "design-references/skill-detail.png",
+    "sha256": "b1a1ae5914f53ce621b6c1103d8fe643d7f8b3e7e8cbfc0327fa044b15e1c7d9",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding-derived",
+    "runtime_use": "派生视觉基线已实施并经独立UIUX审查；保留真实业务能力，映射合同见strict-review/derived-baseline.md",
+    "review": "outputs/明亚工作台UI设计/strict-review/derived-responsive-review.md"
+  },
+  {
+    "id": "xhs-notes",
+    "path": "outputs/明亚工作台UI设计/xhs-notes/xhs-notes-desktop-v1.png",
+    "sha256": "24d1882dcfddc059d017018146853c94662817b5e8b5d535131ba12569e680cc",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "superseded",
+    "runtime_use": "历史v1：用户否决来源整页切换，最新基线见trends-unified-v2"
+  },
+  {
+    "id": "trends-unified-v2",
+    "path": "outputs/明亚工作台UI设计/xhs-notes/trends-unified-desktop-v2.png",
+    "sha256": "89c943915cc774d33aa01c0d620420e6b05cbd2e9499c03f8dd8bbef46cadc60",
+    "size": [
+      1536,
+      1024
+    ],
+    "status": "binding-derived",
+    "runtime_use": "统一页头、范围/来源/搜索面板和内容槽；按用户新决定替代v1整页切换，实施及真实取数待验收"
+  }
+]

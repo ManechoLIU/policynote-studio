@@ -5,6 +5,10 @@ import {
   saveCredentials, getCredentials, startMpLogin, mpLoginStatus,
 } from '../lib/api';
 import type { AccountItem, AccountWhoami } from '../lib/api';
+import { PageBanner, ReferenceArtwork } from './MingyaPrimitives';
+import { IconRefresh } from './icons';
+import { IconGear } from './settingsIcons';
+import '../styles/mingya-accounts.css';
 import { getWhoamiCache, setWhoamiCache, verifyStale } from '../lib/whoami';
 
 type QRState = {
@@ -27,6 +31,25 @@ const STATE_LABEL: Record<string, string> = {
   error: '登录出错',
   unknown: '等待中…',
 };
+
+const PLATFORM_CROPS: Record<string, readonly [number, number, number, number]> = {
+  xiaohongshu: [298, 351, 78, 76], 'wechat-oa': [928, 351, 78, 76],
+  douyin: [298, 522, 78, 76], 'weixin-channels': [928, 522, 80, 76],
+  bilibili: [298, 691, 78, 76], zhihu: [928, 691, 80, 76], kuaishou: [298, 861, 78, 76],
+};
+const PLATFORM_ORDER = ['xiaohongshu', 'wechat-oa', 'douyin', 'weixin-channels', 'bilibili', 'zhihu', 'kuaishou'];
+const PLATFORM_DESCRIPTION: Record<string, string> = {
+  xiaohongshu: '登录你的小红书账号，用于发布笔记、同步内容等创作操作。',
+  'wechat-oa': '配置并登录你的微信公众号，用于发布图文内容。',
+  douyin: '登录你的抖音账号，用于发布视频、管理已发布内容。',
+  'weixin-channels': '登录你的视频号账号，用于发布视频与图文内容。',
+  bilibili: '登录你的 B 站账号，用于发布视频、管理稿件。',
+  zhihu: '登录你的知乎账号，用于发布回答、文章等内容。',
+  kuaishou: '登录你的快手账号，用于发布视频、管理作品。',
+};
+function ScanIcon() {
+  return <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M8 3H4a1 1 0 0 0-1 1v4M16 3h4a1 1 0 0 1 1 1v4M3 16v4a1 1 0 0 0 1 1h4M16 21h4a1 1 0 0 0 1-1v-4M5 12h14" /></svg>;
+}
 
 /** 头像：有 URL 就显示图（加载失败退回首字），否则显示昵称/平台名首字。 */
 function Avatar({ url, name }: { url?: string; name: string }) {
@@ -390,72 +413,51 @@ export default function AccountsPage() {
 
   return (
     <div className="accounts-page">
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-        <div>
-          <h1 className="page-title">账号登录 Accounts</h1>
-          <p className="page-subtitle">
-            用手机 App 扫码登录，登录态本地持久化，之后发布免登。<br />
-            ⚠️ 平台可能对机房/代理 IP 判风险导致二维码弹不出，需干净/家宽 IP，或在正常网络登录后拷贝登录态目录。
-          </p>
-        </div>
-        <button className="btn btn-sm" onClick={load}>⟳ 刷新</button>
-      </div>
-
+      <PageBanner page="accounts" title="账号管理" subtitle="连接你的发布账号，管理登录与授权状态"
+        actions={<button className="btn accounts-refresh" onClick={load}><IconRefresh size={23} />刷新</button>}>
+        <ReferenceArtwork page="accounts" crop={[700, 68, 822, 141]} className="accounts-banner-art" />
+      </PageBanner>
+      <div className="accounts-information"><span className="accounts-information-icon" aria-hidden="true">i</span><span>请登录你需要发布的内容平台账号，完成连接后即可在创作时选择对应账号进行发布。</span></div>
       {err && <div style={{ color: 'var(--red)', fontSize: 13, marginTop: 12 }}>{err}</div>}
       {terminalMsg && (
         <div className="card" style={{ padding: 13, fontSize: 13, marginTop: 14 }}>{terminalMsg}</div>
       )}
 
       <div className="accounts-grid">
-        {accounts.map((a) => {
+        {[...accounts].sort((a, b) => {
+          const first = PLATFORM_ORDER.indexOf(a.platform);
+          const second = PLATFORM_ORDER.indexOf(b.platform);
+          return (first < 0 ? PLATFORM_ORDER.length : first) - (second < 0 ? PLATFORM_ORDER.length : second);
+        }).map((a) => {
           const w = whoami[a.platform];
           const info = w && w !== 'loading' ? w : null;
           const logged = effLoggedIn(a);
           return (
             <div key={a.platform} className="card account-card" style={{ opacity: a.supported ? 1 : 0.6 }}>
-              <div className="account-card-head">
-                <span className="account-card-name">{a.name}</span>
-                {badge(a)}
+              {PLATFORM_CROPS[a.platform] ? <ReferenceArtwork page="accounts" crop={PLATFORM_CROPS[a.platform]} className="account-platform-icon" label={a.name} /> : <div className="account-platform-icon account-platform-fallback">{a.name.charAt(0)}</div>}
+              <div className="account-card-copy">
+                <div className="account-card-head"><span className="account-card-name">{a.platform === 'weixin-channels' ? '视频号' : a.name}</span>{badge(a)}</div>
+                {logged && info ? <div className="account-identity"><Avatar url={info.avatar} name={info.name || a.name} /><span className="account-nick">{info.name || '（已登录）'}</span></div> : <div className="account-card-note">{PLATFORM_DESCRIPTION[a.platform] || a.note || `登录你的${a.name}账号。`}</div>}
               </div>
-
-              {logged && info && (
-                <div className="account-identity">
-                  <Avatar url={info.avatar} name={info.name || a.name} />
-                  <span className="account-nick">{info.name || '（已登录）'}</span>
-                </div>
-              )}
-              {!logged && (
-                <div className="account-card-note">{a.note ? a.note : `后端：${a.name}`}</div>
-              )}
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 'auto' }}>
-                {logged ? (
-                  <>
-                    <button className="btn btn-sm" style={{ flex: 1 }}
-                      disabled={busy === a.platform || busy === a.platform + ':mp' || w === 'loading'}
-                      onClick={() => runWhoami(a.platform)}>
-                      {w === 'loading' ? '校验中…' : '校验账号'}
-                    </button>
-                    <button className="btn btn-sm btn-ghost" style={{ flex: 1 }}
-                      disabled={logoutBusy === a.platform}
-                      onClick={() => handleLogout(a)}>
-                      {logoutBusy === a.platform ? '退出中…' : '退出登录'}
-                    </button>
-                  </>
-                ) : (
-                  // 公众号与其它平台统一：都走扫码登录（公众号扫的是后台会话，用于发布+数据）
-                  <button
-                    className={`btn btn-block ${a.supported ? 'btn-primary' : ''}`}
-                    disabled={!a.supported || busy === a.platform || busy === a.platform + ':mp'}
-                    onClick={() => (a.backend === 'wechat-oa' ? handleMpLogin(a) : handleLogin(a))}>
-                    {(busy === a.platform || busy === a.platform + ':mp') ? '启动中…' : '登录'}
-                  </button>
-                )}
+              <div className="account-card-actions">
+                {logged ? <>
+                  <button className="btn account-main-action" disabled={busy === a.platform || busy === a.platform + ':mp' || w === 'loading'} onClick={() => runWhoami(a.platform)}>{w === 'loading' ? '校验中…' : '校验账号'}</button>
+                  <button className="account-secondary-action" disabled={logoutBusy === a.platform} onClick={() => handleLogout(a)}>{logoutBusy === a.platform ? '退出中…' : '退出登录'}</button>
+                </> : <button className={`btn account-main-action ${a.supported ? 'btn-primary' : ''}`}
+                  disabled={!a.supported || busy === a.platform || busy === a.platform + ':mp'}
+                  onClick={() => (a.backend === 'wechat-oa' ? openCred(a) : handleLogin(a))}>
+                  {a.backend === 'wechat-oa' ? <IconGear size={23} /> : <ScanIcon />}
+                  {(busy === a.platform || busy === a.platform + ':mp') ? '启动中…' : a.backend === 'wechat-oa' ? '配置' : '扫码登录'}
+                </button>}
+                {a.backend === 'wechat-oa' && <button className="account-secondary-action" disabled={!a.supported || busy === a.platform || busy === a.platform + ':mp'} onClick={() => handleMpLogin(a)}>{busy === a.platform + ':mp' ? '启动中…' : '后台扫码登录'}</button>}
+                {logged && a.backend === 'wechat-oa' && <button className="account-secondary-action" onClick={() => openCred(a)}>配置凭证</button>}
               </div>
             </div>
           );
         })}
       </div>
+
+      <details className="accounts-technical-notes"><summary>登录与授权说明</summary><p>用手机 App 扫码登录，登录态本地持久化，之后发布免登。</p><p>平台可能对机房或代理 IP 判风险导致二维码弹不出，需干净或家宽 IP，或在正常网络登录后拷贝登录态目录。</p><p>微信公众号可配置 AppID / AppSecret 凭证，后台扫码登录用于发布与后台取数。</p>{accounts.filter((account) => account.note).map((account) => <p key={account.platform}><b>{account.name}：</b>{account.note}</p>)}</details>
 
       {qr && (
         <div className="overlay" onClick={closeQr}>

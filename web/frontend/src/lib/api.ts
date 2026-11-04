@@ -215,10 +215,90 @@ export function deletePersona(name: string): Promise<{ ok: boolean; deleted: str
 }
 
 // ---- 热点雷达 ----
-export interface TrendItem { title: string; hot: string; url: string; }
-export interface TrendGroup { platform: string; label: string; items: TrendItem[]; ok?: boolean; }
-export function fetchTrends(platforms: string, limit = 12): Promise<{ trends: TrendGroup[]; updated: number }> {
-  return request(`/api/trends?platforms=${encodeURIComponent(platforms)}&limit=${limit}`);
+const TRENDS_TIMEOUT_MS = 25_000;
+
+function abortedError(reason?: unknown): Error {
+  if (reason instanceof Error) return reason;
+  return Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+}
+
+export interface TrendItem { title: string; hot: string; url: string; source?: string; published_at?: string; }
+export interface TrendGroup {
+  platform: string;
+  label: string;
+  items: TrendItem[];
+  ok?: boolean;
+  stale?: boolean;
+  updated_at?: number;
+  error?: string | null;
+}
+export interface TrendsPayload {
+  trends: TrendGroup[];
+  updated: number;
+  stale?: boolean;
+  updated_at?: number;
+}
+export function fetchTrends(platforms: string, limit = 12, signal?: AbortSignal): Promise<TrendsPayload> {
+  return fetchTrendSource(`/api/trends?platforms=${encodeURIComponent(platforms)}&limit=${limit}`, signal);
+}
+
+export function fetchInsuranceTrends(limit = 30, signal?: AbortSignal): Promise<TrendsPayload> {
+  return fetchTrendSource(`/api/insurance/trends?limit=${limit}`, signal);
+}
+
+export interface XhsNote {
+  id: string; title: string; body: string | null; content_status: 'summary' | 'full' | 'unavailable';
+  images: string[]; url: string; author: string | null; published_at: string | null;
+  metrics: { likes: number | null; saves: number | null; comments: number | null };
+}
+export interface XhsNotesPayload {
+  query: string; items: XhsNote[]; source: string; fetched_at: string | null; cached: boolean;
+  error: { code: string; message: string; retryable: boolean } | null;
+}
+export function searchXhsNotes(query: string, signal?: AbortSignal): Promise<XhsNotesPayload> {
+  return fetchTrendSource<XhsNotesPayload>(`/api/xhs/notes/search?q=${encodeURIComponent(query)}`, signal, 35_000, '小红书读取超时（35秒），未自动重试');
+}
+export function readXhsNote(url: string, signal?: AbortSignal): Promise<XhsNotesPayload> {
+  return fetchTrendSource<XhsNotesPayload>(`/api/xhs/notes/detail?url=${encodeURIComponent(url)}`, signal, 35_000, '小红书读取超时（35秒），未自动重试');
+}
+
+function fetchTrendSource<T = TrendsPayload>(path: string, signal?: AbortSignal, timeoutMs = TRENDS_TIMEOUT_MS, timeoutMessage = '热点读取超时（25秒）'): Promise<T> {
+  if (signal?.aborted) return Promise.reject(abortedError(signal.reason));
+  const controller = new AbortController();
+  let timedOut = false;
+  let settled = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let onExternalAbort: (() => void) | undefined;
+  const cleanup = () => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+    if (signal && onExternalAbort) signal.removeEventListener('abort', onExternalAbort);
+  };
+  return new Promise((resolve, reject) => {
+    const finish = (settle: () => void) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      settle();
+    };
+    onExternalAbort = () => {
+      controller.abort(signal?.reason);
+      finish(() => reject(abortedError(signal?.reason)));
+    };
+    if (signal) signal.addEventListener('abort', onExternalAbort);
+    timer = setTimeout(() => {
+      timedOut = true;
+      const error = new Error(timeoutMessage);
+      controller.abort(error);
+      finish(() => reject(error));
+    }, timeoutMs);
+    request<T>(path, {
+      signal: controller.signal,
+    }).then(
+      (value) => finish(() => (timedOut ? reject(new Error(timeoutMessage)) : resolve(value))),
+      (error: unknown) => finish(() => reject(timedOut ? new Error(timeoutMessage) : error)),
+    );
+  });
 }
 
 // ---- 内容排期 ----
@@ -498,6 +578,9 @@ export function logoutAccount(platform: string): Promise<{ ok: boolean; deleted:
 
 export interface PublishResult {
   ok?: boolean;
+  outcome?: 'draft_saved' | 'failed';
+  published?: boolean;
+  errorCode?: 'DRAFT_BUTTON_NOT_FOUND' | 'DRAFT_SAVE_UNCONFIRMED' | 'DRAFT_SAVE_FAILED';
   message: string;
   detail?: string;
   async?: boolean;   // true = 异步发布（抖音，可能触发短信验证），需轮询 publishStatus

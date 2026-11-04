@@ -43,7 +43,7 @@ MODEL_GROUPS: dict[str, dict[str, Any]] = {
         "label": "AI 视频生成",
         "settings": [
             _key("VIDEO_PROVIDER", "默认视频 provider", required=False, secret=False,
-                 choices=("dashscope", "ark", "kling", "openai-compatible", "xhs-maas", "agnes")),
+                 choices=("dashscope", "ark", "kling", "openai-compatible", "real-api", "xhs-maas", "agnes")),
             _key("VIDEO_CAPABILITIES_JSON", "模型能力覆盖 JSON", required=False, secret=False),
         ],
         "providers": [
@@ -78,6 +78,15 @@ MODEL_GROUPS: dict[str, dict[str, Any]] = {
                          aliases=("OPENAI_BASE_URL", "BASE_URL")),
                     _key("VIDEO_MODEL", "视频模型", required=False, secret=False,
                          aliases=("VIDEO_MODEL_NAME",)),
+                ],
+            },
+            {
+                "id": "real-api", "name": "Real-API 视频任务", "keys": [
+                    _key("REAL_API_KEY", "API Key"),
+                    _key("REAL_API_BASE_URL", "API 根地址", secret=False),
+                    _key("REAL_API_VIDEO_MODEL", "视频模型", required=False, secret=False),
+                    _key("REAL_API_VIDEO_RESOLUTION", "分辨率", required=False, secret=False,
+                         choices=("480P", "720P", "1080P")),
                 ],
             },
             {

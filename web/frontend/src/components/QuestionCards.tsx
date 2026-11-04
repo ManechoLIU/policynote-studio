@@ -93,7 +93,7 @@ function QuestionCard({ question, onAnswered }: { question: ChatQuestion; onAnsw
                       className={`question-card__option${vals.includes(opt.label) ? ' question-card__option--selected' : ''}`}
                       disabled={busy}
                       onClick={() => pick(it, opt.label)}>
-                      <strong>{opt.label}</strong>
+                      <strong>{vals.includes(opt.label) && <span className="question-selected-check" aria-hidden="true">✓ </span>}{opt.label}</strong>
                       {opt.description && <span>{opt.description}</span>}
                     </button>
                   ))}
@@ -103,7 +103,7 @@ function QuestionCard({ question, onAnswered }: { question: ChatQuestion; onAnsw
                       disabled={busy}
                       title="点击移除"
                       onClick={() => removeCustom(it, v)}>
-                      <strong>{v}</strong>
+                      <strong><span className="question-selected-check" aria-hidden="true">✓ </span>{v}</strong>
                       <span>自定义 · 点击移除</span>
                     </button>
                   ))}

@@ -1,0 +1,80 @@
+/* Reference: design-references/accounts.png, 1536 × 1024. */
+.accounts-page { width:100%; max-width:none; min-width:0; margin:0; padding:4px 14px 36px 22px; color:#101319; }
+.accounts-page .reference-banner-accounts { position:relative; isolation:isolate; height:141px; overflow:hidden; border-radius:19px; background:linear-gradient(111deg,#fff8ed 0%,#fff3e1 63%,#fff3e7 100%); }
+.accounts-page .reference-banner-accounts > .reference-banner-art { display:none; }
+.accounts-page .reference-banner-copy { position:relative; z-index:1; height:100%; padding:18px 37px; }
+.accounts-page .reference-banner-copy h1 { margin:0; font-size:44px; font-weight:750; letter-spacing:-.5px; line-height:1.4; }
+.accounts-page .reference-section-mark { display:flex; align-items:center; gap:21px; }
+.accounts-page .reference-gold-rule { display:block; width:8px; height:44px; border:1px solid #f18a12; border-radius:5px; background:#ff9d1c; }
+.accounts-page .reference-banner-copy p { margin:3px 0 0 29px; color:#343d47; font-size:20px; line-height:1.6; }
+.accounts-page .accounts-banner-art { position:absolute !important; z-index:-1; top:0; right:0; width:822px; height:141px; }
+.accounts-page .reference-banner-actions { position:absolute; z-index:2; top:46px; right:31px; }
+.accounts-page .accounts-refresh { display:inline-flex; align-items:center; justify-content:center; gap:11px; min-width:115px; min-height:45px; padding:0 20px; border:1px solid #bbc3cd; border-radius:13px; background:#fcfdff; color:#161b22; font-size:18px; box-shadow:none; }
+.accounts-page .accounts-information { display:flex; align-items:center; gap:19px; min-height:52px; margin-top:21px; padding:10px 24px; border-radius:14px; background:linear-gradient(100deg,#e1efff,#d6e8ff); color:#00215f; font-size:18px; line-height:1.65; }
+.accounts-page .accounts-information-icon { display:inline-flex; align-items:center; justify-content:center; flex:0 0 24px; width:24px; height:24px; border:2px solid #0045d7; border-radius:50%; color:#0045d7; font-family:Georgia,serif; font-size:18px; font-weight:700; line-height:1; }
+.accounts-page .accounts-grid { display:grid; grid-template-columns:minmax(0,calc((100% - 24px)/2)) minmax(0,1fr); gap:16px; margin-top:30px; }
+.accounts-page .account-card { display:flex; flex-direction:row; align-items:center; min-width:0; min-height:155px; padding:25px 24px 25px 28px; gap:24px; border:1px solid #d5dbe4; border-radius:17px; background:rgba(255,255,255,.49); box-shadow:none; }
+.accounts-page .account-platform-icon { width:78px; height:76px; flex:0 0 78px; border-radius:17px; }
+.accounts-page .account-platform-fallback { display:grid; place-items:center; background:#f6e8d1; color:#805713; font-size:30px; }
+.accounts-page .account-card-copy { min-width:0; flex:1; }
+.accounts-page .account-card-head { display:flex; align-items:center; justify-content:flex-start; flex-wrap:wrap; gap:14px; margin-bottom:11px; }
+.accounts-page .account-card-name { color:#090d15; font-size:24px; font-weight:700; line-height:1.3; white-space:nowrap; }
+.accounts-page .account-card-head .badge { flex:0 0 auto; padding:3px 13px; border:0; border-radius:16px; background:#e8ebf0; color:#303b4a; font-size:15px; line-height:1.45; }
+.accounts-page .account-card-head .badge-ok { color:#176c43; background:#e2f5e9; }
+.accounts-page .account-card-note { min-height:0; color:#36404e; font-size:16px; line-height:1.5; overflow-wrap:anywhere; }
+.accounts-page .account-card-actions { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; align-self:center; flex:0 0 169px; min-height:64px; padding-left:21px; border-left:1px solid #d4dbe4; }
+.accounts-page .account-main-action { display:inline-flex; align-items:center; justify-content:center; gap:10px; width:147px; min-height:42px; padding:0 13px; border:1px solid #ff133f; border-radius:12px; background:#ff1949; color:#fff; font-size:18px; font-weight:650; white-space:nowrap; box-shadow:none; }
+.accounts-page .account-main-action:hover:not(:disabled) { background:#ed123d; border-color:#ed123d; color:white; }
+.accounts-page .account-main-action:disabled { opacity:.6; }
+.accounts-page .account-secondary-action { padding:0 3px; border:0; background:transparent; color:#6b5860; font-size:11px; line-height:1.45; cursor:pointer; }
+.accounts-page .account-secondary-action:hover { text-decoration:underline; color:#eb1541; }
+.accounts-page .account-identity { display:flex; align-items:center; gap:8px; min-width:0; }
+.accounts-page .account-avatar { width:30px; height:30px; flex:0 0 30px; border-radius:50%; object-fit:cover; }
+.accounts-page .account-avatar-fallback { display:grid; place-items:center; background:#3978bd; color:white; font-size:15px; }
+.accounts-page .account-nick { overflow:hidden; color:#36404e; font-size:16px; white-space:nowrap; text-overflow:ellipsis; }
+.accounts-page .accounts-technical-notes { margin-top:22px; color:#6d7581; font-size:13px; line-height:1.7; }
+.accounts-page .accounts-technical-notes summary { width:fit-content; cursor:pointer; }
+.accounts-page .accounts-technical-notes p { margin:8px 0; }
+.accounts-page :is(button,input,summary):focus-visible { outline:2px solid #2876c9; outline-offset:3px; }
+.accounts-page .modal { border-radius:18px; }
+.accounts-page .qr-img { max-width:100%; height:auto; aspect-ratio:1; }
+@media (max-width:1300px) {
+  .accounts-page .account-card { gap:16px; padding-right:18px; padding-left:18px; }
+  .accounts-page .account-platform-icon { width:62px; height:auto; flex-basis:62px; }
+  .accounts-page .account-card-name { font-size:21px; }
+  .accounts-page .account-card-note { font-size:14px; }
+  .accounts-page .account-card-actions { flex-basis:135px; padding-left:14px; }
+  .accounts-page .account-main-action { width:120px; padding:0 8px; gap:6px; font-size:16px; }
+}
+@media (max-width:1050px) {
+  .accounts-page .accounts-grid { grid-template-columns:minmax(0,1fr); }
+  .accounts-page .account-card { gap:24px; padding-left:28px; padding-right:24px; }
+  .accounts-page .account-card-note { font-size:16px; }
+  .accounts-page .account-card-actions { flex-basis:169px; padding-left:21px; }
+  .accounts-page .account-main-action { width:147px; font-size:18px; }
+  .accounts-page .accounts-banner-art { opacity:.55; }
+}
+@media (max-width:760px) {
+  .accounts-page { padding:4px 16px 30px; }
+  .accounts-page .reference-banner-copy { padding:22px 23px; }
+  .accounts-page .reference-banner-copy h1 { font-size:33px; }
+  .accounts-page .reference-banner-copy p { max-width:310px; font-size:15px; margin-left:19px; }
+  .accounts-page .reference-section-mark { gap:13px; }
+  .accounts-page .reference-gold-rule { height:36px; width:6px; }
+  .accounts-page .reference-banner-actions { right:16px; top:10px; }
+  .accounts-page .accounts-refresh { min-width:76px; min-height:32px; padding:0 10px; gap:6px; font-size:14px; }
+  .accounts-page .accounts-refresh svg { width:17px; height:17px; }
+  .accounts-page .accounts-information { gap:12px; padding:11px 15px; font-size:14px; }
+  .accounts-page .account-card { gap:14px; min-height:155px; padding:20px 15px; }
+  .accounts-page .account-platform-icon { width:54px; height:auto; flex-basis:54px; border-radius:13px; }
+  .accounts-page .account-card-head { gap:7px; }
+  .accounts-page .account-card-name { font-size:19px; }
+  .accounts-page .account-card-head .badge { padding:2px 8px; font-size:12px; }
+  .accounts-page .account-card-note { font-size:13px; }
+  .accounts-page .account-card-actions { flex-basis:110px; padding-left:11px; }
+  .accounts-page .account-main-action { width:98px; min-height:38px; padding:0 6px; gap:5px; font-size:14px; }
+  .accounts-page .account-main-action svg { width:18px; height:18px; }
+}
+
+.accounts-page .reference-banner-copy > .accounts-banner-art { display: none; }
+.accounts-page .reference-banner-accounts { background: #fff8ef; }

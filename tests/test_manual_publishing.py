@@ -90,7 +90,8 @@ def test_policy_reports_manual_mode(client):
 
 def test_policy_preserves_automatic_default(client):
     assert client.get("/api/publishing-policy").json() == {"mode": "automated", "automaticSubmission": True}
-    assert web._publishing_message("draft") == "draft"
+    message = web._publishing_message("draft")
+    assert "小红书仅保存平台草稿" in message and message.endswith("draft")
 
 
 @pytest.mark.parametrize("value", ["manual", " MANUAL ", "invalid", "true"])
@@ -124,7 +125,8 @@ def test_manual_policy_is_included_in_agent_messages(client):
     assert "人工提交" in message and "不要调用发布脚本" in message
     assert "排版这个草稿" in message
     web.ENV_FILE.write_text("EASEL_PUBLISH_MODE=automated\n", encoding="utf-8")
-    assert web._publishing_message("draft") == "draft"
+    message = web._publishing_message("draft")
+    assert "不得自动点发布" in message and message.endswith("draft")
 
 
 def test_environment_can_override_mode_in_dotenv(client, monkeypatch):

@@ -1,0 +1,128 @@
+/* 画像页严格对应 design-references/profile.png；所有内容均来自原有画像文件。 */
+.profile-page.my-profile-page {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  padding: 0 12px 18px 20px;
+  overflow-y: auto;
+  background: var(--bg);
+}
+.my-profile-page .reference-banner-profile {
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  min-height: 156px;
+  margin-bottom: 19px;
+  padding: 0 57px 0 24px;
+  gap: 30px;
+  border-radius: 15px;
+  background: linear-gradient(110deg, #fff6e9, #fffbf3 66%, #fff3e3);
+}
+.my-profile-page .reference-banner-art { width: 197px; flex: 0 0 197px; align-self: center; }
+.my-profile-page .reference-banner-copy { min-width: 0; flex: 1; }
+.my-profile-page .reference-banner-copy h1 { margin: 0; color: var(--text); font-size: 36px; line-height: 1.45; font-weight: 700; letter-spacing: .3px; overflow-wrap: anywhere; }
+.my-profile-page .reference-section-mark { display: flex; align-items: center; gap: 16px; }
+.my-profile-page .reference-gold-rule { flex: 0 0 5px; width: 5px; height: 36px; border-radius: 4px; background: #ff8b00; }
+.my-profile-page .reference-banner-copy p { margin-top: 5px; margin-left: 21px; font-size: 20px; line-height: 1.6; letter-spacing: 1px; color: var(--text); }
+.my-profile-page .reference-banner-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 16px; }
+.my-profile-page .reference-banner-actions .btn { display: inline-flex; align-items: center; justify-content: center; min-width: 175px; height: 49px; padding: 10px 20px; gap: 12px; border-radius: 13px; font-size: 20px; font-weight: 550; line-height: 1; }
+.my-profile-page .reference-banner-actions .btn-primary { color: #fff; background: #ff1742; box-shadow: none; }
+.my-profile-page .reference-banner-actions .my-profile-delete { color: #ff1736; border: 1px solid #ff1736; background: var(--surface); }
+.my-profile-dimensions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.my-profile-row { display: grid; grid-template-columns: 414px minmax(0, 1fr); align-items: center; min-width: 0; min-height: 107px; padding: 14px 17px 14px 26px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); }
+.my-profile-row:nth-child(1) { min-height: 136px; }
+.my-profile-row:nth-child(2) { min-height: 128px; }
+.my-profile-row:nth-child(3) { min-height: 125px; }
+.my-profile-row:nth-child(5) { min-height: 109px; }
+.my-profile-row:nth-child(6) { min-height: 106px; }
+.my-profile-label { display: flex; min-width: 0; align-items: center; gap: 29px; padding-right: 16px; }
+.my-profile-dim-art { width: 70px; height: 70px; flex: 0 0 70px; border-radius: 14px; }
+.my-profile-dim-fallback { display: inline-flex; justify-content: center; align-items: center; width: 70px; height: 70px; flex: 0 0 70px; border-radius: 14px; color: var(--brand-gold); background: var(--brand-gold-soft); }
+.my-profile-label-copy { min-width: 0; }
+.my-profile-label h2 { display: flex; align-items: center; gap: 13px; color: var(--text); font-size: 24px; font-weight: 650; line-height: 1.4; margin: 0; }
+.my-profile-gold-rule { width: 5px; height: 24px; flex: 0 0 5px; border-radius: 4px; background: #ff8b00; }
+.my-profile-label p { color: var(--text-secondary); font-size: 18px; line-height: 1.65; margin: 8px 0 0; white-space: nowrap; }
+.my-profile-document { position: relative; min-width: 0; min-height: 72px; padding: 8px 54px 8px 25px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface); }
+.my-profile-row:first-child .my-profile-document { min-height: 100px; }
+.my-profile-content.profile-content { max-height: 62px; overflow: hidden; font-size: 20px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; }
+.my-profile-row:first-child .my-profile-content { max-height: 80px; }
+.my-profile-excerpt { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 0; font-size: 20px; line-height: 1.5; color: var(--text); overflow-wrap: anywhere; white-space: normal; }
+.my-profile-content.profile-content.is-expanded { max-height: none; overflow: visible; }
+.my-profile-content.profile-content h1, .my-profile-content.profile-content h2, .my-profile-content.profile-content h3 { margin: 0 0 5px; font-size: 22px; font-weight: 650; line-height: 1.45; }
+.my-profile-content.profile-content p { margin: 0 0 6px; }
+.my-profile-content.profile-content ul, .my-profile-content.profile-content ol { margin: 0 0 6px; padding-left: 23px; }
+.my-profile-content.profile-content li { margin-bottom: 2px; }
+.my-profile-content.profile-content img { max-width: 100%; height: auto; }
+.my-profile-content.profile-content table, .my-profile-content.profile-content pre { display: block; max-width: 100%; overflow-x: auto; }
+.my-profile-pencil { position: absolute; top: 10px; right: 13px; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 3px; border: 0; border-radius: 6px; color: var(--text-secondary); background: transparent; cursor: pointer; }
+.my-profile-pencil:hover { color: var(--accent-start); background: var(--accent-soft); }
+.my-profile-pencil:disabled { cursor: default; opacity: .5; }
+.my-profile-read-more { position: absolute; right: 54px; bottom: -14px; display: block; margin: 0; padding: 0; border: 0; border-radius: 3px; color: var(--text-secondary); background: transparent; font-size: 11px; line-height: 1.5; cursor: pointer; }
+.my-profile-read-more:hover { color: var(--accent-start); }
+.my-profile-page .my-profile-editor { min-height: 180px; padding: 12px; font: 14px/1.75 'SF Mono', 'Consolas', monospace; resize: vertical; }
+.my-profile-document-actions { display: flex; justify-content: flex-end; margin-top: 10px; }
+.my-profile-platform-tools { margin-top: 4px; color: var(--text-secondary); font-size: 11px; }
+.my-profile-platform-tools summary { width: fit-content; cursor: pointer; }
+.my-profile-platform-tools .btn { margin-top: 9px; }
+.my-profile-error { padding: 12px 16px; margin-bottom: 12px; border: 1px solid var(--red); border-radius: 10px; color: var(--red); background: var(--red-soft); }
+.my-profile-empty { display: flex; align-items: flex-start; gap: 29px; padding: 28px 26px; border: 1px solid var(--border); border-radius: 15px; background: var(--surface); }
+.my-profile-empty h2 { font-size: 24px; font-weight: 650; }
+.my-profile-empty p { margin: 10px 0 20px; color: var(--text-secondary); font-size: 18px; line-height: 1.7; }
+.my-profile-page .toast { display: flex; align-items: center; gap: 8px; }
+.my-profile-page button:focus-visible, .my-profile-page summary:focus-visible, .my-profile-page textarea:focus-visible { outline: 2px solid var(--brand-blue); outline-offset: 3px; }
+:root[data-theme='dark'] .my-profile-page .reference-banner-profile { background: var(--surface); }
+@media (max-width: 1400px) {
+  .my-profile-page .reference-banner-profile { padding-right: 24px; gap: 20px; }
+  .my-profile-page .reference-banner-art { width: 160px; flex-basis: 160px; }
+  .my-profile-page .reference-banner-copy h1 { font-size: 30px; }
+  .my-profile-page .reference-banner-copy p { font-size: 17px; }
+  .my-profile-page .reference-banner-actions .btn { min-width: 140px; padding: 10px 14px; font-size: 17px; }
+  .my-profile-row { grid-template-columns: minmax(300px, 35%) minmax(0, 1fr); }
+  .my-profile-label { gap: 18px; }
+  .my-profile-label h2 { font-size: 22px; }
+  .my-profile-label p { font-size: 15px; white-space: normal; }
+  .my-profile-content.profile-content, .my-profile-excerpt { font-size: 18px; }
+}
+@media (max-width: 1050px) {
+  .my-profile-page .reference-banner-profile { flex-wrap: wrap; gap: 16px; padding: 18px 22px; }
+  .my-profile-page .reference-banner-art { width: 135px; flex-basis: 135px; }
+  .my-profile-page .reference-banner-copy { flex-basis: calc(100% - 160px); }
+  .my-profile-page .reference-banner-actions { margin-left: 155px; }
+  .my-profile-row { grid-template-columns: minmax(230px, 38%) minmax(0, 1fr); padding-left: 18px; }
+  .my-profile-label { gap: 14px; }
+  .my-profile-dim-art, .my-profile-dim-fallback { width: 56px; height: 56px; flex-basis: 56px; border-radius: 11px; }
+  .my-profile-label h2 { gap: 9px; font-size: 20px; }
+  .my-profile-label p { font-size: 13px; }
+  .my-profile-content.profile-content, .my-profile-excerpt { font-size: 17px; }
+}
+@media (max-width: 680px) {
+  .profile-page.my-profile-page { padding: 0 12px 18px; }
+  .my-profile-page .reference-banner-profile { min-height: 156px; gap: 12px; padding: 18px 16px; }
+  .my-profile-page .reference-banner-art { width: 92px; flex-basis: 92px; }
+  .my-profile-page .reference-banner-copy { flex-basis: calc(100% - 110px); }
+  .my-profile-page .reference-banner-copy h1 { font-size: 23px; }
+  .my-profile-page .reference-section-mark { gap: 9px; }
+  .my-profile-page .reference-gold-rule { height: 26px; width: 4px; flex-basis: 4px; }
+  .my-profile-page .reference-banner-copy p { margin-left: 13px; font-size: 13px; letter-spacing: 0; }
+  .my-profile-page .reference-banner-actions { width: 100%; margin-left: 0; gap: 10px; }
+  .my-profile-page .reference-banner-actions .btn { flex: 1; min-width: 0; height: 41px; font-size: 15px; gap: 7px; padding: 9px; }
+  .my-profile-page .reference-banner-actions .btn svg { width: 20px; height: 20px; }
+  .my-profile-row { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 17px; }
+  .my-profile-label { padding: 0; gap: 17px; }
+  .my-profile-label h2 { font-size: 20px; }
+  .my-profile-label p { margin-top: 5px; font-size: 13px; }
+  .my-profile-document { padding-left: 16px; }
+  .my-profile-content.profile-content { font-size: 16px; max-height: 72px; }
+  .my-profile-excerpt { font-size: 16px; }
+  .my-profile-empty { padding: 22px 17px; gap: 17px; }
+  .my-profile-empty h2 { font-size: 20px; }
+  .my-profile-empty p { font-size: 14px; }
+}
+
+/* Stretch the cleaned paper center, preserving both illustrated ends from the one asset. */
+.my-profile-page .reference-banner-profile { --profile-banner-art-height: 156px; background: #fff8ed; }
+@media (min-width: 901px) and (max-width: 1450px) { .my-profile-page .reference-banner-profile { --profile-banner-art-height: 140px; } }
+@media (min-width: 1101px) and (max-height: 820px) { .my-profile-page .reference-banner-profile { --profile-banner-art-height: 120px; } }

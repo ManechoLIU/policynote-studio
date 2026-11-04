@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { fetchSchedule, createSchedule, updateSchedule, deleteSchedule, fetchScheduleContext } from '../lib/api';
 import type { ScheduleItem, ScheduleInput, ScheduleContext } from '../lib/api';
-import { IconCalendar, IconTrash, IconChevron } from './icons';
+import '../styles/mingya-calendar.css';
+import { IconTrash, IconChevron } from './icons';
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
-  idea: { label: '选题', color: 'var(--text-tertiary)' },
-  draft: { label: '草稿', color: 'var(--layer-plan)' },
-  scheduled: { label: '待发', color: 'var(--layer-attribute)' },
-  published: { label: '已发', color: 'var(--layer-publish)' },
+  idea: { label: '选题', color: '#ff9d20' },
+  draft: { label: '草稿', color: '#52a8ff' },
+  scheduled: { label: '待发', color: '#9865ff' },
+  published: { label: '已发', color: '#39ce76' },
 };
-const EVENT_COLOR = 'var(--layer-discover)';
+const EVENT_COLOR = '#ff658c';
 const EVENT_TYPES = ['节日', '电商', '平台活动', '行业'];
 const SOURCE_LABEL: Record<string, string> = {
   chat: '对话页', 'publish-page': '发布页', manual: '手动', scheduler: '排期',
@@ -126,47 +127,25 @@ export default function CalendarPage() {
 
   return (
     <div className="page-scroll calendar-page">
-      <div className="page-head">
-        <div>
-          <h1 className="page-title"><IconCalendar size={21} /> 内容日历</h1>
-          <p className="page-subtitle">每天各平台发什么一目了然——发布自动落库，可记录排期与平台活动。</p>
-        </div>
+      <header className="mingya-calendar-banner">
+        <img className="mingya-calendar-banner-art" src="./static/mingya-derived/calendar-banner.png" alt="" aria-hidden="true" />
+        <div className="mingya-calendar-banner-copy"><h1><span className="mingya-calendar-title-rule" aria-hidden="true" />内容日历</h1><p>每天各平台发什么，一目了然。</p></div>
+      </header>
+      {showSuggest && <aside className="cal-suggest" aria-label="近期机会">
+        <div className="cal-suggest-head"><span className="cal-opportunity-icon" aria-hidden="true">ϟ</span><strong>近期机会</strong></div>
+        <div className="cal-suggest-content">{suggestions.length ? <ul>{suggestions.map((suggestion, i) => <li key={i}>{suggestion}</li>)}</ul> : <p>结合季节与平台热点，提前规划本月内容主题，提升曝光机会。</p>}</div>
+        <button className="icon-btn" aria-label="关闭近期机会提示" onClick={() => setShowSuggest(false)}>×</button>
+      </aside>}
+      <div className="mingya-calendar-toolbar">
         <div className="cal-nav">
-          <button className="btn btn-sm" onClick={() => shift(-1)}><span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><IconChevron size={14} /></span></button>
-          <button className="btn btn-sm" onClick={() => setCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>本月</button>
-          <span className="cal-month">{monthLabel}</span>
-          <button className="btn btn-sm" onClick={() => shift(1)}><IconChevron size={14} /></button>
+          <button className="btn btn-sm" aria-label="上个月" onClick={() => shift(-1)}><span style={{ transform: 'rotate(180deg)', display: 'inline-flex' }}><IconChevron size={17} /></span>上个月</button>
+          <div className="cal-month-control"><button className="cal-this-month" onClick={() => setCursor(new Date(today.getFullYear(), today.getMonth(), 1))}>本月</button><label className="cal-month"><span className="cal-month-label">{monthLabel}</span><input aria-label="选择日历月份" type="month" value={`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`} onChange={(event) => { const [year, month] = event.target.value.split('-').map(Number); if (year && month) setCursor(new Date(year, month - 1, 1)); }} /></label></div>
+          <button className="btn btn-sm" aria-label="下个月" onClick={() => shift(1)}>下个月<IconChevron size={17} /></button>
         </div>
+        <div className="cal-legend-filter"><span>内容类型：</span><div className="cal-filter-options">{(['all', 'content', 'event'] as Filter[]).map((value) => <button key={value} className={`chip ${filter === value ? 'active' : ''}`} onClick={() => setFilter(value)}>{value === 'all' ? '全部' : value === 'content' ? '内容' : '活动'}</button>)}</div></div>
+        <div className="cal-legend">{Object.entries(STATUS_META).map(([key, meta]) => <span key={key} className="cal-legend-item"><span className="cal-legend-swatch" style={{ ['--sw' as string]: meta.color }} />{meta.label}</span>)}<span className="cal-legend-item"><span className="cal-legend-swatch" style={{ ['--sw' as string]: EVENT_COLOR }} />活动</span></div>
       </div>
-
-      {showSuggest && suggestions.length > 0 && (
-        <div className="cal-suggest">
-          <div className="cal-suggest-head">
-            <span>📅 日历建议（近 {ctx?.window_days ?? 14} 天）</span>
-            <button className="icon-btn" onClick={() => setShowSuggest(false)}>×</button>
-          </div>
-          <ul>{suggestions.map((s, i) => <li key={i}>{s}</li>)}</ul>
-        </div>
-      )}
-
-      <div className="cal-legend">
-        {Object.entries(STATUS_META).map(([k, m]) => (
-          <span key={k} className="cal-legend-item">
-            <span className="cal-legend-swatch" style={{ ['--sw' as string]: m.color }} />{m.label}
-          </span>
-        ))}
-        <span className="cal-legend-item">
-          <span className="cal-legend-swatch sq" style={{ ['--sw' as string]: EVENT_COLOR }} />平台活动
-        </span>
-        <span className="cal-legend-filter">
-          {(['all', 'content', 'event'] as Filter[]).map((f) => (
-            <button key={f} className={`chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
-              {f === 'all' ? '全部' : f === 'content' ? '内容' : '活动'}
-            </button>
-          ))}
-        </span>
-      </div>
-
+      <div className="mingya-calendar-table">
       <div className="cal-grid-head">
         {WEEKDAYS.map((w) => <div key={w} className="cal-wd">周{w}</div>)}
       </div>
@@ -193,6 +172,8 @@ export default function CalendarPage() {
             </div>
           );
         })}
+      </div>
+
       </div>
 
       {dayView && (() => {

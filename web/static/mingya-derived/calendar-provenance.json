@@ -1,0 +1,18 @@
+{
+  "cleared_source_rectangles" : [
+    [
+      294,
+      150,
+      500,
+      87
+    ]
+  ],
+  "crop" : [
+    269,
+    137,
+    1253,
+    118
+  ],
+  "source" : "design-references\/calendar.png",
+  "unchanged_artwork_pixels_checked" : 48720
+}

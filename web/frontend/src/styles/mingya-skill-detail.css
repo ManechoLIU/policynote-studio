@@ -1,0 +1,123 @@
+/* Scoped derivative of the approved skill detail drawer. */
+.drawer-overlay.mingya-skill-overlay { position: fixed; top: 64px; right: 0; bottom: 0; left: var(--sidebar-width, 248px); z-index: 55; background: #1a203469; backdrop-filter: none; }
+.mingya-skill-overlay .mingya-skill-drawer { position: absolute; top: 0; right: 0; bottom: 0; width: 735px; max-width: 100%; height: 100%; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #e4e8f0; border-radius: 19px 0 0 19px; background: #fdfdff; box-shadow: -10px 0 40px #23334d12; animation: none; }
+.mingya-skill-drawer .drawer-header { flex: 0 0 auto; padding: 25px 26px 20px; border-bottom: 0; background: #fdfdff; }
+.mingya-skill-drawer .mingya-skill-identity { display: flex; align-items: center; gap: 22px; min-width: 0; }
+.mingya-skill-drawer .mingya-skill-identity-icon { flex: 0 0 62px; width: 62px; height: 62px; border-radius: 15px; display: inline-flex; align-items: center; justify-content: center; color: #ff8700; background: #fff2df; }
+.mingya-skill-drawer .mingya-skill-identity-copy { min-width: 0; }
+.mingya-skill-drawer .skill-detail-title { color: #141b28; font-size: 25px; line-height: 34px; font-weight: 700; overflow-wrap: anywhere; }
+.mingya-skill-drawer .skill-detail-rawname { color: #7a7f8b; font: inherit; font-size: 17px; line-height: 24px; overflow-wrap: anywhere; }
+.mingya-skill-drawer .skill-detail-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin: 0; }
+.mingya-skill-drawer .badge { padding: 5px 13px; border: 1px solid transparent; border-radius: 9px; font-size: 14px; line-height: 20px; white-space: nowrap; }
+.mingya-skill-drawer .badge-accent { color: #b66513; background: #ffeed7; }
+.mingya-skill-drawer .badge-ok { color: #248e4c; background: #e9f9eb; border-color: #b8e7bd; }
+.mingya-skill-drawer .badge-warn { color: #d87b00; background: #fff5e8; border-color: #f9d2a0; }
+.mingya-skill-drawer .mingya-neutral-badge { color: #637085; background: #f0f3f8; border-color: #dde3ec; }
+.mingya-skill-drawer .mingya-skill-close { align-self: flex-start; flex: 0 0 26px; margin: -7px -5px 0 auto; width: 26px; height: 30px; padding: 0; border: 0; background: none; font-size: 33px; font-weight: 300; color: #808692; cursor: pointer; }
+.mingya-skill-drawer .drawer-body { flex: 1; min-height: 0; overflow: auto; padding: 0 18px 32px 25px; }
+.mingya-skill-drawer .panel { margin: 0 0 16px; padding: 10px 16px 12px; border: 1px solid #e0e5ee; border-radius: 15px; background: #ffffff8c; box-shadow: none; }
+.mingya-skill-drawer .mingya-detail-section-head { display: flex; align-items: center; gap: 15px; margin-bottom: 14px; }
+.mingya-skill-drawer .mingya-detail-section-icon { flex: 0 0 45px; width: 45px; height: 45px; display: inline-flex; align-items: center; justify-content: center; color: #ff8800; border-radius: 12px; background: #fff4e4; }
+.mingya-skill-drawer .panel-title { margin: 0; color: #111723; font-size: 21px; line-height: 29px; font-weight: 700; }
+.mingya-skill-drawer .mingya-detail-section-head p { margin: 0; color: #727783; font-size: 14px; line-height: 22px; }
+.mingya-skill-drawer .provider-block { margin-bottom: 13px; padding: 0 10px 12px; border: 0; border-bottom: 1px solid #edf0f6; border-radius: 0; background: transparent; }
+.mingya-skill-drawer .provider-head { margin-bottom: 8px; }
+.mingya-skill-drawer .provider-head strong { color: #303c50; font-size: 14px; line-height: 23px; font-weight: 600; }
+.mingya-skill-drawer .provider-head .badge { padding: 2px 8px; font-size: 12px; }
+.mingya-skill-drawer .mingya-provider-field { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: start; gap: 5px; margin-top: 8px; }
+.mingya-skill-drawer .field-label { display: flex; flex-wrap: wrap; align-items: center; min-height: 32px; margin: 0; color: #172033; font-size: 14px; line-height: 20px; }
+.mingya-skill-drawer .mingya-provider-configured { grid-column: 2; min-width: 0; margin-top: -1px; color: var(--green); font-size: 12px; line-height: 18px; overflow-wrap: anywhere; }
+.mingya-skill-drawer .field { width: 100%; min-width: 0; min-height: 32px; padding: 5px 13px; border: 1px solid #ced4e0; border-radius: 9px; color: #303b4d; background: #fff; font-size: 14px; line-height: 20px; box-shadow: none; }
+.mingya-skill-drawer textarea.field { resize: vertical; padding: 10px 13px; min-height: 84px; }
+.mingya-skill-drawer .mingya-api-save-row { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 10px; }
+.mingya-skill-drawer .btn { display: inline-flex; justify-content: center; align-items: center; min-height: 36px; padding: 6px 22px; border: 1px solid #ccd4e1; border-radius: 10px; color: #1a2438; background: #fff; font-size: 15px; line-height: 23px; font-weight: 500; box-shadow: none; }
+.mingya-skill-drawer .btn-primary { color: #fff; border-color: #ff0439; background: #ff0439; }
+.mingya-skill-drawer .btn:disabled { color: #fff; border-color: #d0d2d8; background: #d0d2d8; opacity: 1; cursor: not-allowed; }
+.mingya-skill-drawer .mingya-skill-run { padding-top: 5px; padding-bottom: 15px; }
+.mingya-skill-drawer .mingya-skill-execute-row { display: flex; align-items: center; justify-content: space-between; gap: 15px; margin: 12px 0 19px; }
+.mingya-skill-drawer .mingya-skill-persona { display: flex; align-items: center; gap: 15px; min-width: 0; color: #7b818c; font-size: 15px; }
+.mingya-skill-drawer .mingya-skill-persona > span:first-child { flex-shrink: 0; }
+.mingya-skill-drawer .mingya-skill-persona-value { display: inline-flex; align-items: center; gap: 9px; max-width: 380px; min-height: 35px; padding: 4px 12px; border: 1px solid #cfd6e1; border-radius: 8px; color: #222b3a; font-size: 14px; overflow-wrap: anywhere; }
+.mingya-skill-drawer .mingya-skill-persona-value svg { flex-shrink: 0; color: #5f6977; }
+.mingya-skill-drawer .mingya-skill-result-empty { display: flex; align-items: center; justify-content: center; flex-direction: column; min-height: 104px; gap: 9px; border: 1px dashed #cbd3e0; border-radius: 10px; background: #f8f9fc; color: #727b8c; font-size: 15px; line-height: 24px; }
+.mingya-skill-drawer .mingya-skill-result-empty svg { color: #a0a8b6; }
+.mingya-skill-drawer .skill-result { margin-top: 0; padding: 13px; border-color: #dce3ee; border-radius: 10px; background: #f8faff; font-size: 14px; line-height: 1.7; overflow-wrap: anywhere; }
+.mingya-skill-drawer .mingya-skill-instructions { padding-top: 10px; }
+.mingya-skill-drawer .mingya-skill-instructions .mingya-detail-section-head { margin-bottom: 4px; gap: 11px; }
+.mingya-skill-drawer .mingya-skill-instructions .mingya-detail-section-icon { width: 40px; height: 36px; flex-basis: 40px; }
+.mingya-skill-drawer .skill-body-md { color: #303a4e; font-size: 14px; line-height: 1.75; overflow-wrap: anywhere; }
+.mingya-skill-drawer .skill-body-md h1, .mingya-skill-drawer .skill-body-md h2 { font-size: 18px; margin: 12px 0 7px; }
+.mingya-skill-drawer .skill-body-md h3 { font-size: 16px; margin: 10px 0 6px; }
+.mingya-skill-drawer .skill-body-md pre { overflow-x: auto; }
+.mingya-skill-drawer .skill-body-md table { display: block; overflow-x: auto; }
+@media (max-width: 1450px), (max-height: 850px) {
+  .drawer-overlay.mingya-skill-overlay { top: 56px; }
+  .mingya-skill-overlay .mingya-skill-drawer { width: 640px; }
+  .mingya-skill-drawer .drawer-header { padding: 20px 20px 18px; }
+  .mingya-skill-drawer .mingya-skill-identity { gap: 15px; }
+  .mingya-skill-drawer .mingya-skill-identity-icon { width: 54px; height: 54px; flex-basis: 54px; }
+  .mingya-skill-drawer .skill-detail-title { font-size: 22px; line-height: 29px; }
+  .mingya-skill-drawer .skill-detail-rawname { font-size: 14px; line-height: 22px; }
+  .mingya-skill-drawer .skill-detail-meta { gap: 8px; }
+  .mingya-skill-drawer .badge { padding: 4px 9px; font-size: 13px; }
+  .mingya-skill-drawer .drawer-body { padding: 0 20px 25px; }
+  .mingya-skill-drawer .panel { padding: 10px 14px 12px; }
+  .mingya-skill-drawer .panel-title { font-size: 18px; line-height: 25px; }
+  .mingya-skill-drawer .mingya-detail-section-head { gap: 11px; margin-bottom: 12px; }
+  .mingya-skill-drawer .mingya-detail-section-head p { font-size: 13px; line-height: 21px; }
+  .mingya-skill-drawer .mingya-detail-section-icon { width: 39px; height: 39px; flex-basis: 39px; }
+  .mingya-skill-drawer .mingya-provider-field { grid-template-columns: 88px minmax(0, 1fr); }
+  .mingya-skill-drawer .field, .mingya-skill-drawer .field-label { font-size: 14px; }
+  .mingya-skill-drawer .btn { min-height: 34px; font-size: 14px; padding: 5px 18px; }
+}
+@media (max-height: 850px) {
+  .drawer-overlay.mingya-skill-overlay { top: 48px; }
+}
+@media (max-width: 760px) {
+  .drawer-overlay.mingya-skill-overlay { inset: 0; top: 0; }
+  .mingya-skill-overlay .mingya-skill-drawer { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; }
+  .mingya-skill-drawer .drawer-header { padding: 16px; }
+  .mingya-skill-drawer .drawer-body { padding: 0 12px 20px; }
+  .mingya-skill-drawer .mingya-skill-identity { gap: 10px; flex-wrap: wrap; padding-right: 22px; }
+  .mingya-skill-drawer .mingya-skill-identity-icon { width: 46px; height: 46px; flex-basis: 46px; }
+  .mingya-skill-drawer .skill-detail-title { font-size: 20px; }
+  .mingya-skill-drawer .skill-detail-meta { margin-left: 56px; }
+  .mingya-skill-drawer .mingya-skill-close { position: absolute; top: 20px; right: 16px; }
+  .mingya-skill-drawer .mingya-provider-field { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .mingya-skill-drawer .field-label { min-height: 23px; }
+  .mingya-skill-drawer .mingya-provider-configured { grid-column: 1; }
+  .mingya-skill-drawer .mingya-skill-execute-row { align-items: flex-start; }
+  .mingya-skill-drawer .mingya-skill-persona { flex-wrap: wrap; gap: 5px; }
+  .mingya-skill-drawer .mingya-skill-persona-value { max-width: 100%; }
+}
+/* Dark theme only. Light rules above stay the baseline. */
+:root[data-theme='dark'] .mingya-skill-overlay .mingya-skill-drawer,
+:root[data-theme='dark'] .mingya-skill-drawer .drawer-header { border-color: var(--border); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-identity-icon,
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-detail-section-icon { color: var(--brand-gold); background: var(--brand-gold-soft); }
+:root[data-theme='dark'] .mingya-skill-drawer .skill-detail-title,
+:root[data-theme='dark'] .mingya-skill-drawer .panel-title,
+:root[data-theme='dark'] .mingya-skill-drawer .field-label,
+:root[data-theme='dark'] .mingya-skill-drawer .provider-head strong,
+:root[data-theme='dark'] .mingya-skill-drawer .skill-body-md { color: var(--text); }
+:root[data-theme='dark'] .mingya-skill-drawer .skill-detail-rawname,
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-detail-section-head p,
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-close,
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-persona { color: var(--text-secondary); }
+:root[data-theme='dark'] .mingya-skill-drawer .badge-accent { color: var(--brand-gold); background: var(--brand-gold-soft); border-color: transparent; }
+:root[data-theme='dark'] .mingya-skill-drawer .badge-ok { color: var(--green); background: var(--green-soft); border-color: var(--green); }
+:root[data-theme='dark'] .mingya-skill-drawer .badge-warn { color: var(--amber); background: var(--amber-soft); border-color: var(--amber); }
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-neutral-badge { color: var(--text-secondary); background: var(--surface-2); border-color: var(--border); }
+:root[data-theme='dark'] .mingya-skill-drawer .panel,
+:root[data-theme='dark'] .mingya-skill-drawer .provider-block { border-color: var(--border); background: var(--surface-2); }
+:root[data-theme='dark'] .mingya-skill-drawer .provider-block { background: transparent; }
+:root[data-theme='dark'] .mingya-skill-drawer .field,
+:root[data-theme='dark'] .mingya-skill-drawer .btn:not(.btn-primary),
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-persona-value { border-color: var(--border-strong); background: var(--surface); color: var(--text); }
+:root[data-theme='dark'] .mingya-skill-drawer .btn.btn-primary { border-color: var(--accent-start); background: var(--accent-gradient); color: var(--text); }
+:root[data-theme='dark'] .mingya-skill-drawer .btn:disabled { border-color: var(--border); background: var(--surface-2); color: var(--text-tertiary); }
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-persona-value svg,
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-result-empty { color: var(--text-secondary); }
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-result-empty { border-color: var(--border-strong); background: var(--surface-2); }
+:root[data-theme='dark'] .mingya-skill-drawer .mingya-skill-result-empty svg { color: var(--text-tertiary); }
+:root[data-theme='dark'] .mingya-skill-drawer .skill-result { border-color: var(--border); background: var(--surface-2); color: var(--text); }

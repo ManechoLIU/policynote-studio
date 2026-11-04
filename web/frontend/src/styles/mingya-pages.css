@@ -1,0 +1,13 @@
+/* Derived controls keep their original layout; surfaces inherit binding profile/chat/cards. */
+.page-title { color:var(--text); }
+.field { border-radius:10px;background:var(--surface);border-color:var(--border-strong);color:var(--text); }
+.field:focus { border-color:var(--brand-gold);box-shadow:none; }
+.badge { border-radius:9px; }
+.drawer,.modal { background:var(--surface);border-color:var(--border); }
+.panel { background:var(--surface);border-color:var(--border);border-radius:14px; }
+.drawer-header,.drawer-body { color:var(--text); }
+.subnav { background:var(--surface);border-color:var(--border); }
+.subnav-tab.active { color:var(--accent-start);background:var(--accent-soft); }
+.notice-error { color:var(--red); }
+.gcard-del { opacity:1; }
+@media(max-width:700px){.drawer{max-width:100vw}.modal{max-width:calc(100vw - 24px)}.settings-overlay .board{overflow-x:auto;max-width:100%}.settings-overlay .prow{min-width:980px}}

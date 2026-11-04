@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import type { ChatSession } from '../lib/store';
 import type { PersonaItem } from '../lib/api';
-import type { ComponentType } from 'react';
 import {
-  IconChat, IconSkills, IconOutputs, IconAccounts, IconProfile,
   IconNewChat, IconEdit, IconArchive, IconUnarchive, IconTrash, IconChevron,
-  IconDashboard,
 } from './icons';
 import { IconGear } from './settingsIcons';
 import ThemeToggle from './ThemeToggle';
+import { ReferenceArtwork, WorkspaceGlyph } from './MingyaPrimitives';
 
 export type Page = 'dashboard' | 'chat' | 'trends' | 'ideas' | 'discovery' | 'calendar' | 'publish' | 'breakdown' | 'skills' | 'outputs' | 'accounts' | 'profile';
 
@@ -32,14 +30,14 @@ interface SidebarProps {
   onOpenSettings: () => void;
 }
 
-// 主导航（精简）；热点雷达/选题库/内容日历/发布中心 收进「工作台」，不占侧栏
-const NAV: { page: Page; Icon: ComponentType<{ size?: number }>; label: string }[] = [
-  { page: 'dashboard', Icon: IconDashboard, label: '工作台' },
-  { page: 'chat', Icon: IconChat, label: '对话' },
-  { page: 'skills', Icon: IconSkills, label: '技能库' },
-  { page: 'outputs', Icon: IconOutputs, label: '内容库' },
-  { page: 'accounts', Icon: IconAccounts, label: '账号' },
-  { page: 'profile', Icon: IconProfile, label: '画像' },
+// 保留既有六个主导航，选题等功能仍从工作台进入。
+const NAV: { page: Page; glyph: string; label: string }[] = [
+  { page: 'dashboard', glyph: 'home', label: '创作工作台' },
+  { page: 'chat', glyph: 'write', label: '笔记创作' },
+  { page: 'skills', glyph: 'layers', label: '技能库' },
+  { page: 'outputs', glyph: 'layers', label: '内容库' },
+  { page: 'accounts', glyph: 'user', label: '账号管理' },
+  { page: 'profile', glyph: 'star', label: '我的 IP' },
 ];
 
 export default function Sidebar({
@@ -115,11 +113,11 @@ export default function Sidebar({
   };
 
   return (
-    <div className="sidebar">
+    <div className="sidebar strict-sidebar">
       <div className="sidebar-header">
         <div className="sidebar-logo">
-          <img className="sidebar-logo-icon" src="./static/xunhuan-mark.svg" alt="" />
-          <h1>寻欢小红书获客系统</h1>
+          <ReferenceArtwork page="home" crop={[20, 14, 186, 66]} className="sidebar-reference-logo" label="明亚 小红书工作台" />
+          <h1 className="sr-only">明亚小红书工作台</h1>
           <ThemeToggle />
         </div>
         <select
@@ -139,39 +137,46 @@ export default function Sidebar({
         </select>
       </div>
 
-      <nav className="sidebar-nav">
-        {NAV.map(({ page, Icon, label }) => (
+      <nav className="sidebar-nav" aria-label="工作台导航">
+        {NAV.map(({ page, glyph, label }) => (
           <button
             key={page}
             className={`nav-item ${currentPage === page ? 'active' : ''}`}
+            aria-current={currentPage === page ? 'page' : undefined}
             onClick={() => onPageChange(page)}
           >
-            <span className="nav-icon"><Icon size={18} /></span>
+            <span className="nav-icon"><WorkspaceGlyph kind={glyph} /></span>
             {label}
           </button>
         ))}
       </nav>
 
-      <div className="sidebar-section">
-        <div className="sidebar-section-header">
-          <span className="sidebar-section-title">对话</span>
-          <button className="new-chat-btn" onClick={onNewChat} title="新建对话">
-            <IconNewChat size={13} /> 新对话
-          </button>
-        </div>
-        {active.map((s) => renderItem(s, false))}
-
-        {archived.length > 0 && (
+      <div className="sidebar-section" id="sidebar-sessions">
+        {currentPage === 'chat' && (
           <>
-            <div className="archived-header" onClick={() => setShowArchived((v) => !v)}>
-              <span className={`archived-chevron ${showArchived ? 'open' : ''}`}><IconChevron size={12} /></span>
-              已归档 · {archived.length}
+            <div className="sidebar-section-header">
+              <span className="sidebar-section-title">创作历史</span>
+              <button className="new-chat-btn" onClick={onNewChat} title="新建创作对话">
+                <IconNewChat size={13} /> 新创作
+              </button>
             </div>
-            {showArchived && archived.map((s) => renderItem(s, true))}
+            {active.map((s) => renderItem(s, false))}
+
+            {archived.length > 0 && (
+              <>
+                <div className="archived-header" onClick={() => setShowArchived((v) => !v)}>
+                  <span className={`archived-chevron ${showArchived ? 'open' : ''}`}><IconChevron size={12} /></span>
+                  已归档 · {archived.length}
+                </div>
+                {showArchived && archived.map((s) => renderItem(s, true))}
+              </>
+            )}
           </>
         )}
       </div>
 
+      <button className="sidebar-settings" onClick={onOpenSettings}><IconGear size={23} /> 设置</button>
+      <div className="sidebar-workspace-note">▱ <span>本地工作空间</span></div>
       <div className="sidebar-status">
         <span className={`status-dot ${gatewayStatus === 'connected' ? '' : 'offline'}`} />
         <span className="sidebar-status-text">{gatewayStatus === 'connected'
@@ -179,9 +184,7 @@ export default function Sidebar({
           : gatewayStatus === 'disconnected'
             ? (apiDirect ? 'API 配置不完整' : agentRuntime !== 'openclaw' ? `${agentRuntime} CLI 未配置` : '网关离线')
             : '连接中…'}</span>
-        <button className="settings-gear" onClick={onOpenSettings} title="设置（模型 · 环境 · 更多）">
-          <IconGear size={13} /> 设置
-        </button>
+
       </div>
     </div>
   );

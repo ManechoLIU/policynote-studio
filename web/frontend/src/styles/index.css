@@ -48,7 +48,7 @@
   --t: 0.22s var(--ease);
 }
 
-*, *::before, *::after {
+* {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
@@ -67,11 +67,6 @@ body {
   -webkit-font-smoothing: antialiased;
   background: var(--bg);
 }
-
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -148,12 +143,6 @@ body {
 }
 .nav-item:hover { background: var(--surface-hover); color: var(--text); }
 .nav-item.active { background: var(--accent-soft); color: var(--text); }
-.nav-item.active::before {
-  content: ''; position: absolute; left: 0;
-  width: 3px; height: 18px;
-  background: var(--accent-gradient);
-  border-radius: 0 3px 3px 0;
-}
 .nav-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; color: currentColor; opacity: 0.9; }
 
 .sidebar-section { padding: 4px 8px; flex: 1; overflow-y: auto; }
@@ -271,7 +260,6 @@ body {
   outline: none; transition: border-color var(--t-fast), box-shadow var(--t-fast);
 }
 .field:focus { border-color: var(--accent-start); box-shadow: 0 0 0 3px var(--accent-soft); }
-.field::placeholder { color: var(--text-tertiary); }
 textarea.field { resize: vertical; min-height: 90px; }
 
 .card {
@@ -288,7 +276,6 @@ textarea.field { resize: vertical; min-height: 90px; }
   letter-spacing: 0.08em; color: var(--text-secondary);
   margin: 26px 0 12px;
 }
-.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 .section-title .dot { width: 8px; height: 8px; border-radius: 3px; }
 
 .page-title { display: flex; align-items: center; gap: 9px; font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
@@ -551,7 +538,6 @@ textarea.field { resize: vertical; min-height: 90px; }
   background: color-mix(in srgb, var(--accent-start, #4361ee) 12%, #fff);
   border: 1px solid color-mix(in srgb, var(--accent-start, #4361ee) 30%, #fff);
 }
-.question-card__option--selected strong::before { content: '✓ '; color: var(--accent-start, #4361ee); font-weight: 700; }
 
 
 .message-bubble {
@@ -627,7 +613,6 @@ textarea.field { resize: vertical; min-height: 90px; }
   cursor: pointer; font-size: 12.5px; color: var(--text-secondary);
   list-style: none; user-select: none;
 }
-.thinking-block summary::-webkit-details-marker { display: none; }
 .thinking-text {
   margin-top: 6px; font-size: 12.5px; line-height: 1.6;
   color: var(--text-tertiary); white-space: pre-wrap; max-height: 180px; overflow-y: auto;
@@ -640,7 +625,6 @@ textarea.field { resize: vertical; min-height: 90px; }
   font-size: 14.5px; font-family: inherit; line-height: 1.55; resize: none; outline: none;
   max-height: 180px; min-height: 24px; display: block;
 }
-.chat-input::placeholder { color: var(--text-tertiary); }
 .send-btn {
   width: 34px; height: 34px; border-radius: 10px; border: none;
   background: var(--text); color: white; cursor: pointer;
@@ -669,11 +653,6 @@ textarea.field { resize: vertical; min-height: 90px; }
 .skill-card {
   position: relative; padding: 17px 16px 15px; overflow: hidden;
   display: flex; flex-direction: column; gap: 9px; min-height: 124px;
-}
-.skill-card::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
-  background: var(--layer-color, var(--accent-start));
-  opacity: 0.85;
 }
 .skill-card-icon {
   width: 40px; height: 40px; border-radius: 11px; flex-shrink: 0;
@@ -1324,7 +1303,7 @@ textarea.field { resize: vertical; min-height: 90px; }
 .settings-overlay .env-meter i { display: block; height: 100%; width: 100%; background: var(--accent-gradient); border-radius: 99px; transform: scaleX(0); transform-origin: left; transition: transform .5s cubic-bezier(.22,1,.36,1); }
 
 @media (prefers-reduced-motion: reduce) {
-  .settings-overlay *, .settings-overlay *::before, .settings-overlay *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  .settings-overlay * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
 /* 设置面板 · v2：卡片严格等宽（minmax(0,1fr) 防长文本顶破列宽）+ 可编辑输入 */

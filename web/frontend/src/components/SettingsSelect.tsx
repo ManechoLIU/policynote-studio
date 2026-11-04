@@ -107,7 +107,7 @@ export function OptionsDropdown({ anchor, items, current, emptyHint, onPull, pul
 
   if (!pos) return null;
   return createPortal(
-    <div ref={ref} className="model-dd" role="listbox" onClick={(event) => event.stopPropagation()}
+    <div ref={ref} className="model-dd mingya-settings-dropdown" role="listbox" onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => {
         event.stopPropagation();
         const keys = ['ArrowDown', 'ArrowUp', 'Home', 'End'];

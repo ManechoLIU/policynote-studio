@@ -10,7 +10,9 @@ import {
   fetchLocalAgents, enableLocalAgent, fetchAvailableModels,
 } from '../lib/api';
 import type { EnvTool, ModelRow, SelftestResult, LocalAgentInfo } from '../lib/api';
-import { IconSlidersHorizontal, IconPackage, IconEllipsis } from './settingsIcons';
+import { IconSlidersHorizontal, IconPackage, IconEllipsis, IconGear } from './settingsIcons';
+import { IconCheck, IconRefresh } from './icons';
+import '../styles/mingya-settings.css';
 
 interface Props {
   onClose: () => void;
@@ -641,14 +643,13 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
 
   return (
     <div
-      className="settings-overlay"
+      className="settings-overlay mingya-settings-overlay"
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="settings-panel" role="dialog" aria-modal="true" aria-label="设置">
         <div className="settings-head">
           <div>
-            <h2 className="settings-title">设置</h2>
-            <div className="settings-sub">模型配置 · 环境安装 · 更多设置</div>
+            <h2 className="settings-title"><IconGear size={28} />设置</h2>
           </div>
           <div className="settings-actions">
             <button
@@ -657,7 +658,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
               disabled={saving || modelLoading || sec !== 'model' || (chan === 'chat' && (selectedHarness !== harness || !['api', 'openclaw'].includes(harness)))}
               title={chan === 'chat' && !['api', 'openclaw'].includes(harness) ? '请使用下方「保存底座」保存原生配置' : undefined}
             >
-              {saving ? '保存中…' : '保存配置'}
+              <IconCheck size={20} />{saving ? '保存中…' : '保存配置'}
             </button>
             <button
               className="btn btn-sm"
@@ -665,7 +666,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
               disabled={testing || modelLoading || selectedHarness !== harness || (!['api', 'openclaw'].includes(harness) && (sec !== 'model' || chan === 'chat'))}
               title={!['api', 'openclaw'].includes(harness) ? '原生对话请发送消息或运行 easel ping 验证' : undefined}
             >
-              {testing ? '自测中…' : '全部自测'}
+              <IconRefresh size={20} />{testing ? '自测中…' : '全部自测'}
             </button>
             <button className="settings-close" onClick={onClose} title="关闭（Esc）">✕</button>
           </div>
@@ -703,7 +704,7 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                 <div className="tabbar">
                   {CHANNELS.map((c) => (
                     <button key={c.id} className={`tab${chan === c.id ? ' active' : ''}`} onClick={() => setChan(c.id)}>
-                      <span className="cdot" />{c.label}
+                      {c.label}
                     </button>
                   ))}
                 </div>
@@ -713,12 +714,13 @@ export default function SettingsPanel({ onClose, banner = '' }: Props) {
                 {chan === 'chat' && (selectedHarness === 'api' || selectedHarness === 'openclaw') && (
                   <section className="st-panel active">
                     <div className="panel-top">
-                      <strong>{selectedHarness === 'api' ? '仅聊天模式 API 配置' : 'OpenClaw API 配置'}</strong>
+                      <strong className="settings-section-title"><span className="settings-title-mark" />模型连接</strong>
                       <span className={`pill ${chatOk ? 'ok' : 'off'}`}><span className="dot" />{chatOk ? '已配置' : '未配置'}</span>
                       {selftest && <span className="desc">上次自测 {hhmm(selftest.testedAt)}</span>}
                       <span className="spacer" />
                       <button className="btn btn-sm" onClick={() => void doSelftest('chat')} disabled={testing || selectedHarness !== harness}>自测本通道</button>
                     </div>
+                    <p className="model-connection-description">配置可用的模型连接，用于对话与脚本生成时的模型调用。支持多条连接配置，按现有顺序使用。</p>
                     {renderBoard(chatRows, { onRow: (i, p) => updateRow(setChatRows, i, p), onPrimary: setPrimaryRow, onRemove: removeRow })}
                     {selectedHarness === 'api' ? <div className="foot-note">此通道使用独立的 EASEL_DIRECT_API_* 配置，与原有 OpenAI 通道分开保存。支持聊天、画像、文本和图片附件（需模型支持图片）。没有本机文件、浏览器或技能执行工具。</div>
                       : <div className="add-row" onClick={addProvider}>＋ 添加供应商（填名称 / 模型 / Base URL / Key；点「设为主」切换生效通道）</div>}
