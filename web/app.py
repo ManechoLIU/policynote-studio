@@ -510,7 +510,7 @@ def _same_loopback_origin(request: Request, origin: str) -> bool:
 
 app.add_middleware(CORSMiddleware, allow_origins=_LOCAL_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=['localhost', '127.0.0.1'] + _EXTRA_HOSTS)
-_XHS_ACCOUNT_READ_PATHS = {'/api/xhs/notes/search', '/api/xhs/notes/detail', '/api/xhs/notes/original'}
+_XHS_ACCOUNT_READ_PATHS = {'/api/xhs/notes/feed', '/api/xhs/notes/search', '/api/xhs/notes/detail', '/api/xhs/notes/original'}
 
 
 @app.middleware('http')
@@ -4281,6 +4281,8 @@ def _login_status(platform: str) -> dict:
     else:
         data['qr'] = ''
         data['qrTs'] = 0
+    if proc is not None and getattr(proc, '_easel_login_scope', None) == 'community':
+        data['scope'] = 'community'
     return data
 
 
@@ -4296,15 +4298,19 @@ async def api_accounts():
 
 
 @app.post("/api/login/{platform}")
-async def api_login_start(platform: str, restart: bool = False):
+async def api_login_start(platform: str, restart: bool = False, scope: str = 'default'):
     if platform not in LOGIN_RUNNERS:
         raise HTTPException(404, '未知平台')
+    if scope not in ('default', 'community') or (scope == 'community' and platform != 'xiaohongshu'):
+        raise HTTPException(400, '登录用途无效')
     lock = _LOGIN_START_LOCKS.setdefault(platform, asyncio.Lock())
     async with lock:
+        if scope == 'community':
+            return await _start_login(platform, restart, scope=scope)
         return await _start_login(platform, restart)
 
 
-async def _start_login(platform: str, restart: bool = False):
+async def _start_login(platform: str, restart: bool = False, scope: str = 'default'):
     """启动后台登录并立即返回，二维码由前端状态轮询获取。"""
     cfg = LOGIN_RUNNERS.get(platform)
     if not cfg:
@@ -4319,6 +4325,11 @@ async def _start_login(platform: str, restart: bool = False):
     existing = LOGIN_PROCESSES.get(platform)
     if existing is not None and existing.poll() is None:
         if not restart:
+            existing_scope = getattr(existing, '_easel_login_scope', 'default')
+            if existing_scope not in ('default', 'community'):
+                existing_scope = 'default'
+            if existing_scope != scope:
+                raise HTTPException(409, '另一用途的登录正在进行，请等待完成后重新连接')
             return {'mode': 'qr', **_login_status(platform)}
         try:
             existing.terminate()
@@ -4337,6 +4348,8 @@ async def _start_login(platform: str, restart: bool = False):
     if backend == 'xhs':
         cmd = [sys.executable, str(SHARED_SCRIPTS / 'xhs_publish.py'), 'login', '--no-proxy',
                '--qr-out', str(qr), '--status-file', str(status), '--timeout', str(LOGIN_TIMEOUT)]
+        if scope == 'community':
+            cmd.append('--community-only')
         if sys.platform == 'darwin':
             cmd.append('--headed')
     elif backend == 'biliup':
@@ -4371,6 +4384,7 @@ async def _start_login(platform: str, restart: bool = False):
                                 stdout=log_file, stderr=subprocess.STDOUT)
     finally:
         log_file.close()
+    proc._easel_login_scope = scope
     LOGIN_PROCESSES[platform] = proc
     s = _login_status(platform)
     if s['state'] == 'unknown':
@@ -5643,6 +5657,17 @@ def _xhs_notes_response(result) -> dict:
     return result
 
 
+@app.get('/api/xhs/notes/feed')
+async def api_xhs_notes_feed():
+    """One authenticated homefeed page, not an insurance ranking."""
+    from easel.xhs_notes import feed_notes
+    try:
+        result = await asyncio.to_thread(feed_notes)
+    except Exception:
+        raise HTTPException(502, '小红书推荐读取暂时不可用。') from None
+    return _xhs_notes_response(result)
+
+
 @app.get('/api/xhs/notes/search')
 async def api_xhs_notes_search(request: Request):
     """One read-only keyword page; no automatic fetch, ranking or publish action."""
@@ -5709,7 +5734,7 @@ async def api_xhs_notes_original(request: Request):
         query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
         if (_canonical_url(destination)[0] != canonical or parsed.netloc != 'www.xiaohongshu.com'
                 or parsed.fragment or set(query) != {'xsec_token', 'xsec_source'}
-                or query['xsec_source'] != ['pc_search'] or len(query['xsec_token']) != 1
+                or query['xsec_source'] not in (['pc_search'], ['pc_feed']) or len(query['xsec_token']) != 1
                 or not re.fullmatch(r'[A-Za-z0-9._~+/=-]{1,4096}', query['xsec_token'][0])):
             raise ValueError()
     except Exception:

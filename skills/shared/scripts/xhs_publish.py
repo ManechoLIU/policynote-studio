@@ -126,6 +126,11 @@ def _profile_dir(base: str | None) -> Path:
     return root / PROFILE_NAME
 
 
+def _community_profile_base() -> str:
+    """Separate community-reader browser state from the publishing profile."""
+    return str(Path.home() / ".easel-browser-profiles" / "community-reader")
+
+
 def _cloak_executable() -> Path | None:
     """本机已装的 CloakBrowser 内核。只用 ~/.cloakbrowser，不用调研 profile / 9344 / 9345。
 
@@ -405,10 +410,10 @@ def _missing_qr_reason(page) -> str:
     return "未找到可识别的登录二维码，登录弹窗未打开或页面结构已变化"
 
 
-def _capture_login_qr(page, qr_out: Path, *, creator_only: bool = False) -> bool:
+def _capture_login_qr(page, qr_out: Path, *, creator_only: bool = False, community_only: bool = False) -> bool:
     """首页无法出码时只尝试一次官方创作平台入口；False 表示已登录。"""
     failures = []
-    for url in ((CREATOR_LOGIN_URL,) if creator_only else (None, CREATOR_LOGIN_URL)):
+    for url in ((None,) if community_only else (CREATOR_LOGIN_URL,) if creator_only else (None, CREATOR_LOGIN_URL)):
         entry = "创作平台" if url else "小红书首页"
         try:
             if url:
@@ -417,7 +422,7 @@ def _capture_login_qr(page, qr_out: Path, *, creator_only: bool = False) -> bool
             reason = f"打不开小红书创作平台（{type(error).__name__}），请检查网络连接后重试"
             failures.append(f"{entry}：{reason}")
             continue
-        if _is_logged_in(page):
+        if not community_only and _is_logged_in(page):
             return False
         reason = _login_error(page)
         if not reason:
@@ -431,7 +436,7 @@ def _capture_login_qr(page, qr_out: Path, *, creator_only: bool = False) -> bool
                                     SELECTORS["qr_switch"], minimum_size=96)
                 return True
             except Exception as error:
-                if _is_logged_in(page):
+                if not community_only and _is_logged_in(page):
                     return False
                 reason = _login_error(page) or _missing_qr_reason(page)
                 print(f"小红书抓码失败（{entry}/{type(error).__name__}）：{reason}", file=sys.stderr)
@@ -1752,6 +1757,28 @@ def _wait_community_login_surface(page) -> None:
         page.wait_for_timeout(800)
 
 
+def _community_identity(context, timeout_s=6):
+    from redbook_read import _SessionError, community_status_from_context
+    try:
+        return community_status_from_context(context, timeout_s=timeout_s)
+    except _SessionError as error:
+        messages = {
+            'verification_required': '社区账号需要验证，已停止登录恢复。',
+            'ip_blocked': '社区账号受到网络风险限制，已停止登录恢复。',
+            'signature_error': '社区身份校验失败，已停止登录恢复。',
+            'api_error': '社区身份接口返回错误，已停止登录恢复。',
+            'timeout': '社区身份校验超时，登录状态未确认。',
+        }
+        stages = {
+            'cookie_read': '读取登录状态', 'cookie_select': '检查登录状态',
+            'node_resolve': '准备身份校验', 'node_exit': '请求身份接口',
+            'json_parse': '解析身份响应', 'identity_shape': '检查身份字段',
+        }
+        message = messages.get(error.code, '社区身份校验异常，登录状态未确认。')
+        stage = stages.get(error.stage, '身份校验')
+        raise RuntimeError(f"{message}（阶段：{stage}；类别：{error.code}）") from None
+
+
 def cmd_login(a) -> int:
     """headless 友好登录：把二维码抠成 PNG 供扫码，轮询登录成功后持久化 cookie。
     REF login.go FetchQrcodeImage/WaitForLogin。远程无桌面环境靠图片扫码，非有头窗口。"""
@@ -1762,9 +1789,11 @@ def cmd_login(a) -> int:
 
     qr_out = Path(a.qr_out).expanduser() if a.qr_out else DEFAULT_QR_OUT
     timeout_s = a.timeout or 180
+    community_only = getattr(a, "community_only", False)
     sf = getattr(a, "status_file", None)
+    profile_base = (a.profile_base if a.profile_base is not None else _community_profile_base()) if community_only else a.profile_base
     login_state.write_status(sf, "starting", "正在启动…")
-    lock = _ProfileLock(_profile_dir(a.profile_base))
+    lock = _ProfileLock(_profile_dir(profile_base))
     try:
         lock.acquire(90)
     except TimeoutError:
@@ -1774,13 +1803,18 @@ def cmd_login(a) -> int:
     try:
         with sync_playwright() as p:
             try:
-                ctx = _launch(p, headed=a.headed, base=a.profile_base, proxy=_proxy(a.proxy, a.no_proxy))
+                ctx = _launch(p, headed=a.headed, base=profile_base, proxy=_proxy(a.proxy, a.no_proxy))
             except Exception as e:
                 login_state.write_status(sf, "error", "浏览器没能打开。请关闭弹窗，等 10 秒再点登录，不要连点。")
                 _die(f"启动浏览器失败：{e}", 1)
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             try:
-                if _creator_account(ctx) is not None:
+                if community_only:
+                    if _community_identity(ctx):
+                        login_state.write_status(sf, "success", "社区账号已登录")
+                        print("✅ 社区账号身份已确认，无需扫码")
+                        return 0
+                elif _creator_account(ctx) is not None:
                     login_state.write_status(sf, "success", "已登录")
                     print("✅ 已登录（创作平台账号接口已确认），无需扫码")
                     return 0
@@ -1793,6 +1827,8 @@ def cmd_login(a) -> int:
                     page.goto(EXPLORE_URL, wait_until="commit", timeout=30000)
                 except Exception as error:
                     explore_failed = True
+                    if community_only:
+                        raise RuntimeError("小红书社区首页无法打开，请检查网络后重试") from None
                     print(f"小红书首页无法打开（{type(error).__name__}），尝试官方创作平台入口",
                           file=sys.stderr)
 
@@ -1800,7 +1836,7 @@ def cmd_login(a) -> int:
                 if not explore_failed:
                     _wait_community_login_surface(page)
 
-                if _is_logged_in(page):
+                if not community_only and _is_logged_in(page):
                     login_state.write_status(sf, "success", "已登录")
                     print("✅ 已登录（cookie 已在持久化目录），无需扫码")
                     return 0
@@ -1808,8 +1844,8 @@ def cmd_login(a) -> int:
                 # 抠二维码存 PNG（元素截图，不依赖 src 格式，最稳）
                 qr = False
                 try:
-                    qr = _capture_login_qr(page, qr_out, creator_only=explore_failed)
-                    if not qr:
+                    qr = _capture_login_qr(page, qr_out, creator_only=explore_failed, **({"community_only": True} if community_only else {}))
+                    if not qr and not community_only:
                         login_state.write_status(sf, "success", "已登录")
                         print("✅ 已登录（创作平台登录态已在持久化目录），无需扫码")
                         return 0
@@ -1833,14 +1869,14 @@ def cmd_login(a) -> int:
                 print(f"⏳ 等待扫码确认（最长 {timeout_s}s）...", file=sys.stderr)
 
                 # 轮询登录成功（扫码成功瞬间页面会跳转，查询崩了是正常的，重试继续等）
-                deadline = time.time() + timeout_s
+                deadline = (time.monotonic() if community_only else time.time()) + timeout_s
                 next_refresh = time.monotonic() + 5
                 next_account_check = next_refresh
                 scanned = False
                 refreshes = 0
-                while time.time() < deadline:
+                while (time.monotonic() if community_only else time.time()) < deadline:
                     try:
-                        logged_in = _is_logged_in(page)
+                        logged_in = False if community_only else _is_logged_in(page)
                     except Exception as e:
                         err = str(e).lower()
                         if a.headed and ("target" in err or "closed" in err or "has been closed" in err):
@@ -1852,7 +1888,11 @@ def cmd_login(a) -> int:
                     if state == "scanned" and not scanned:
                         scanned = True
                         login_state.write_status(sf, "scanned", "扫码成功，请在小红书 App 中确认；正在等待登录完成")
-                    if not logged_in and (reason or (
+                    if community_only and time.monotonic() >= next_account_check:
+                        remaining = deadline - time.monotonic()
+                        logged_in = remaining > 0 and _community_identity(ctx, timeout_s=min(6, remaining))
+                        next_account_check = time.monotonic() + 10
+                    if not community_only and not logged_in and (reason or (
                             scanned and time.monotonic() >= next_account_check)):
                         logged_in = _creator_account(ctx) is not None
                         next_account_check = time.monotonic() + 5
@@ -2217,6 +2257,7 @@ def main() -> int:
 
     p = sub.add_parser("login", help="扫码登录并持久化（headless：抠二维码成图片）")
     add_common(p)
+    p.add_argument("--community-only", action="store_true", help="仅确认社区账号登录态")
     p.add_argument("--qr-out", help=f"二维码图片输出路径（默认 {DEFAULT_QR_OUT}）")
     p.add_argument("--status-file", help="登录状态 JSON 输出路径（供 Web 后端轮询）")
     p.add_argument("--timeout", type=int, help="等待扫码超时秒数（默认 180）")

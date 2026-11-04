@@ -209,7 +209,7 @@ def profile_dependencies(monkeypatch,m,*,fail_at=None):
         calls.append(('launch',kw))
         if fail_at=='launch':raise RuntimeError('PRIVATE_LAUNCH')
         return Context()
-    monkeypatch.setattr(m,'_dependencies',lambda:(Manager,Lock,launch,lambda base:'OWNED_PROFILE'))
+    monkeypatch.setattr(m,'_dependencies',lambda:(Manager,Lock,launch,lambda base:'OWNED_PROFILE',lambda:'COMMUNITY_BASE'))
     return calls
 
 
@@ -220,7 +220,7 @@ def test_session_uses_fixed_profile_no_navigation_and_closes_before_return(monke
     assert header.startswith('a1=TEST_A1;')
     assert calls[0]==('profile','OWNED_PROFILE') and ('lock',1) in calls
     launch=next(value for tag,*value in calls if tag=='launch')[0]
-    assert launch['headed'] is False and launch['base'] is None and launch['proxy'] is None
+    assert launch['headed'] is False and launch['base'] == 'COMMUNITY_BASE' and launch['proxy'] is None
     assert launch['login_assets'] is False and launch['timeout_ms']<=8000 and launch['retry_target_closed'] is False
     assert ('cookies','https://www.xiaohongshu.com') in calls
     assert [x[0] for x in calls][-3:]==['close','manager_exit','release']
@@ -368,7 +368,7 @@ def test_trusted_note_context_uses_fixed_original_client_bootstrap_not_secret_ar
     assert 'PRIVATE_NOTE_TOKEN' not in json.dumps(result)
 
 
-@pytest.mark.parametrize('change',[{'note_id':'a'*24},{'source':'pc_feed'},
+@pytest.mark.parametrize('change',[{'note_id':'a'*24},{'source':'pc_other'},
     {'token':'bad\nSECRET'},{'account_id':''}])
 def test_mismatched_or_invalid_note_context_never_runs_profile_or_node(shim,monkeypatch,capsys,change):
     context={**locator_context(),**change}

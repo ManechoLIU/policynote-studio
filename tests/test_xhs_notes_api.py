@@ -296,7 +296,7 @@ def test_original_untrusted_host_is_rejected_before_adapter(monkeypatch):
 
 @pytest.mark.parametrize('destination',[
     'https://www.xiaohongshu.com/explore/'+'a'*24+'?xsec_token=SECRET&xsec_source=pc_search',
-    URL+'?xsec_token=SECRET&xsec_source=pc_feed',
+    URL+'?xsec_token=SECRET&xsec_source=pc_other',
     URL+'?xsec_token=SECRET&xsec_source=pc_search&web_session=PRIVATE',
     URL+'?xsec_token=SECRET&xsec_token=OTHER&xsec_source=pc_search',
 ])
@@ -305,3 +305,11 @@ def test_original_destination_is_same_note_and_only_expected_locator_parameters(
     response=client().get(ORIGINAL,params={'url':URL},follow_redirects=False)
     assert response.status_code==502 and 'location' not in response.headers
     assert 'SECRET' not in response.text and 'PRIVATE' not in response.text
+
+
+def test_original_feed_locator_is_allowed(monkeypatch):
+    monkeypatch.setattr(xhs_notes, 'original_note_url', lambda url: URL+'?xsec_token=NOTE&xsec_source=pc_feed')
+    response = client().get(ORIGINAL, params={'url': URL}, follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers['location'].endswith('xsec_token=NOTE&xsec_source=pc_feed')
+    assert response.headers['cache-control'] == 'no-store'

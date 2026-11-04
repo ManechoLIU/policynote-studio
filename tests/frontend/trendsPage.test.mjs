@@ -426,7 +426,7 @@ test('general mode keeps the full hotlist and does not assume an insurance ident
   assert.equal(button(tree, '保险相关').props.disabled, true);
   assert.equal(button(tree, '保险相关').props['aria-pressed'], false);
   assert.equal(button(tree, '全部热点').props['aria-pressed'], true);
-  assert.match(text(nodes(tree).find(node => node.props?.className === 'trend-current-ip')), /通用模式（未选择IP）/);
+  assert.equal(nodes(tree).some(node => node.props?.className === 'trend-current-ip'), false);
   assert.equal(app.calls[0].kind, 'general');
 });
 

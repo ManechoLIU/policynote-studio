@@ -85,7 +85,7 @@ def _resolve_cli() -> str:
 
 def _run_cli(executable: str, args: list[str], deadline: float):
     """Bound both streams while reading; discard stderr rather than leaking secrets."""
-    valid = args == ['status', '--json'] or (
+    valid = args in (['status', '--json'], ['feed', '--json']) or (
         len(args) == 3 and args[0] in ('search', 'read') and args[-1] == '--json'
         and isinstance(args[1], str) and args[1] and not args[1].startswith('-')
         and '\x00' not in args[1])
@@ -107,7 +107,7 @@ def _run_cli(executable: str, args: list[str], deadline: float):
         child_env.pop('EASEL_XHS_SEARCH_KEYWORD', None)
         child_env['EASEL_XHS_READ_BUDGET_MS'] = str(remaining_ms)
         expected_account = _EXPECTED_ACCOUNT.get()
-        if args[0] == 'search' and isinstance(expected_account, str) and expected_account:
+        if args[0] in ('search', 'feed') and isinstance(expected_account, str) and expected_account:
             child_env['EASEL_XHS_EXPECTED_ACCOUNT'] = expected_account
         locator = _READ_CONTEXT.get()
         if (args[0] == 'read' and isinstance(locator, dict)
@@ -188,7 +188,7 @@ def _run_cli(executable: str, args: list[str], deadline: float):
 
 def _run_cli_stage(executable: str, args: list[str], deadline: float):
     """Emit a fixed diagnostic schema to server stderr, without command inputs."""
-    phase = args[0] if args[0] in ('status', 'search', 'read') else 'unknown'
+    phase = args[0] if args[0] in ('status', 'search', 'read', 'feed') else 'unknown'
     started = time.monotonic()
     error_code = 'cli_failed'
     try:
@@ -389,17 +389,17 @@ def _parse_items(data, operation, expected_id):
     return result
 
 
-def _failure(query, code, phase=None):
+def _failure(query, code, phase=None, source=_SOURCE):
     message = _MESSAGES[code]
     if code == 'timeout':
         message = {'status': '小红书登录状态检查超时。',
                    'search': '小红书笔记搜索超时。',
                    'read': '小红书笔记详情读取超时。'}.get(phase, message)
-    return {'query': query, 'items': [], 'source': _SOURCE, 'fetched_at': None, 'cached': False,
+    return {'query': query, 'items': [], 'source': source, 'fetched_at': None, 'cached': False,
             'error': {'code': code, 'message': message, 'retryable': False}}
 
 
-def _remember_note_contexts(cli, account, data, items):
+def _remember_note_contexts(cli, account, data, items, source='pc_search'):
     """Search access locators stay private, bounded and scoped to the current account."""
     if not account or Path(cli).resolve() != _BUNDLED_SHIM.resolve():
         return
@@ -431,7 +431,7 @@ def _remember_note_contexts(cli, account, data, items):
         while len(_NOTE_CONTEXTS) >= _NOTE_CONTEXT_MAX:
             del _NOTE_CONTEXTS[next(iter(_NOTE_CONTEXTS))]
         _NOTE_CONTEXTS[key] = (now + _NOTE_CONTEXT_SECONDS,
-                              {'note_id': note_id, 'token': tokens.pop(), 'source': 'pc_search',
+                              {'note_id': note_id, 'token': tokens.pop(), 'source': source,
                                'account_id': account})
 
 
@@ -478,10 +478,10 @@ def original_note_url(url: str) -> str:
             raise _CliError('auth_required')
         locator = _read_locator(cli, account, note_id)
         if (not locator or locator.get('note_id') != note_id or locator.get('account_id') != account
-                or locator.get('source') != 'pc_search' or not isinstance(locator.get('token'), str)
+                or locator.get('source') not in ('pc_search', 'pc_feed') or not isinstance(locator.get('token'), str)
                 or not re.fullmatch(r'[A-Za-z0-9._~+/=-]{1,4096}', locator['token'])):
             raise _CliError('original_unavailable')
-        return canonical + '?' + urlencode({'xsec_token': locator['token'], 'xsec_source': 'pc_search'})
+        return canonical + '?' + urlencode({'xsec_token': locator['token'], 'xsec_source': locator['source']})
     except _CliError as exc:
         if exc.code in ('auth_required', 'risk_control'):
             _CACHE.clear()
@@ -495,17 +495,22 @@ def original_note_url(url: str) -> str:
 
 def _execute(operation, target, limit, expected_id=None):
     global _STOP_ERROR
+    source = 'xiaohongshu_homefeed' if operation == 'feed' else _SOURCE
     deadline = time.monotonic() + _TIMEOUT_SECONDS
     if not _LOCK.acquire(timeout=_TIMEOUT_SECONDS):
-        return _failure(target, 'busy')
+        return _failure(target, 'busy', source=source)
     phase = None
     try:
         if _STOP_ERROR:
             raise _CliError(_STOP_ERROR)
         cli = _resolve_cli()
+        if operation == 'feed' and Path(cli).resolve() != _BUNDLED_SHIM.resolve():
+            raise _CliError('cli_not_configured')
         phase = 'status'
         status = _run_cli_stage(cli, ['status', '--json'], deadline)
         account = _account_id(status)
+        if operation == 'feed' and not account:
+            raise _CliError('auth_required')
         key = (cli, account, operation, target)
         now = time.monotonic()
         # Without a stable account identity, never reuse cached data.
@@ -517,18 +522,21 @@ def _execute(operation, target, limit, expected_id=None):
             phase = operation
             context_token = _READ_CONTEXT.set(_read_locator(cli, account, expected_id)
                                               if operation == 'read' else None)
-            account_token = _EXPECTED_ACCOUNT.set(account if operation == 'search'
+            account_token = _EXPECTED_ACCOUNT.set(account if operation in ('search', 'feed')
                 and Path(cli).resolve() == _BUNDLED_SHIM.resolve() else None)
             try:
-                data = _run_cli_stage(cli, [operation, target, '--json'], deadline)
+                data = _run_cli_stage(cli, [operation, '--json'] if operation == 'feed' else [operation, target, '--json'], deadline)
             finally:
                 _READ_CONTEXT.reset(context_token)
                 _EXPECTED_ACCOUNT.reset(account_token)
             result = {'query': target, 'items': _parse_items(data, operation, expected_id),
-                      'source': _SOURCE, 'fetched_at': datetime.now(timezone.utc).isoformat(),
+                      'source': source, 'fetched_at': datetime.now(timezone.utc).isoformat(),
                       'cached': False, 'error': None}
-            if operation == 'search':
-                _remember_note_contexts(cli, account, data, result['items'])
+            if operation == 'feed':
+                result['items'] = result['items'][:20]
+            if operation in ('search', 'feed'):
+                _remember_note_contexts(cli, account, data, result['items'],
+                                        'pc_feed' if operation == 'feed' else 'pc_search')
             if account:
                 for old in [k for k, v in _CACHE.items() if v[0] <= now]:
                     del _CACHE[old]
@@ -543,9 +551,14 @@ def _execute(operation, target, limit, expected_id=None):
             _NOTE_CONTEXTS.clear()
         if exc.code == 'risk_control':
             _STOP_ERROR = exc.code
-        return _failure(target, exc.code, phase)
+        return _failure(target, exc.code, phase, source)
     finally:
         _LOCK.release()
+
+
+def feed_notes() -> dict:
+    """Read one bounded page of the current account's recommendations."""
+    return _execute('feed', '', 20)
 
 
 def search_notes(query: str, limit: int = 20) -> dict:

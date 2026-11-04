@@ -255,6 +255,10 @@ export interface XhsNotesPayload {
   query: string; items: XhsNote[]; source: string; fetched_at: string | null; cached: boolean;
   error: { code: string; message: string; retryable: boolean } | null;
 }
+export function fetchXhsFeed(signal?: AbortSignal): Promise<XhsNotesPayload> {
+  return fetchTrendSource<XhsNotesPayload>('/api/xhs/notes/feed', signal, 35_000, '小红书推荐读取超时（35秒），未自动重试');
+}
+
 export function searchXhsNotes(query: string, signal?: AbortSignal): Promise<XhsNotesPayload> {
   return fetchTrendSource<XhsNotesPayload>(`/api/xhs/notes/search?q=${encodeURIComponent(query)}`, signal, 35_000, '小红书读取超时（35秒），未自动重试');
 }
@@ -504,6 +508,7 @@ export interface AccountItem {
 }
 
 export interface LoginStart {
+  scope?: 'community';
   mode: 'qr' | 'terminal' | 'credentials';   // credentials = 凭证式（公众号 AppID/AppSecret）
   state?: string;       // starting | qr_ready | success | expired | error | unknown
   message?: string;
@@ -550,6 +555,7 @@ export function mpLoginStatus(platform: string): Promise<LoginStatus> {
 
 export interface LoginStatus {
   mode: 'qr';
+  scope?: 'community';
   state: string;
   message: string;
   qr: string;
@@ -638,8 +644,9 @@ export function submitPublishSms(platform: string, code: string): Promise<{ ok: 
   });
 }
 
-export function startLogin(platform: string): Promise<LoginStart> {
-  return request<LoginStart>(`/api/login/${encodeURIComponent(platform)}?restart=true`, { method: 'POST' });
+export function startLogin(platform: string, scope: 'default' | 'community' = 'default'): Promise<LoginStart> {
+  const suffix = scope === 'community' ? '&scope=community' : '';
+  return request<LoginStart>(`/api/login/${encodeURIComponent(platform)}?restart=true${suffix}`, { method: 'POST', signal: AbortSignal.timeout(15000) });
 }
 
 export function loginStatus(platform: string): Promise<LoginStatus> {

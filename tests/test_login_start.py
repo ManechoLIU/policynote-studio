@@ -7,6 +7,46 @@ import pytest
 import web.app as web
 
 
+def test_community_scope_reaches_only_xhs_runner(tmp_path, monkeypatch):
+    monkeypatch.setattr(web, 'LOGIN_DIR', tmp_path)
+    monkeypatch.setattr(web, 'LOGIN_PROCESSES', {})
+    monkeypatch.setattr(web, '_LOGIN_START_LOCKS', {})
+    monkeypatch.setattr(web, '_WHOAMI_CACHE', {})
+    proc = Mock(); proc.poll.return_value = None
+    spawn = Mock(return_value=proc)
+    monkeypatch.setattr(web.subprocess, 'Popen', spawn)
+    result = asyncio.run(web.api_login_start('xiaohongshu', restart=True, scope='community'))
+    assert '--community-only' in spawn.call_args.args[0]
+    assert result['scope'] == 'community'
+    with pytest.raises(web.HTTPException) as exc:
+        asyncio.run(web.api_login_start('zhihu', scope='community'))
+    assert exc.value.status_code == 400
+    assert spawn.call_count == 1
+
+
+def test_default_login_is_not_community_scoped(tmp_path, monkeypatch):
+    monkeypatch.setattr(web, 'LOGIN_DIR', tmp_path)
+    monkeypatch.setattr(web, 'LOGIN_PROCESSES', {})
+    monkeypatch.setattr(web, '_LOGIN_START_LOCKS', {})
+    proc = Mock(); proc.poll.return_value = None
+    spawn = Mock(return_value=proc)
+    monkeypatch.setattr(web.subprocess, 'Popen', spawn)
+    result = asyncio.run(web.api_login_start('xiaohongshu'))
+    assert '--community-only' not in spawn.call_args.args[0]
+    assert 'scope' not in result
+
+
+def test_community_does_not_reuse_active_default_login(monkeypatch):
+    proc = Mock(); proc.poll.return_value = None
+    proc._easel_login_scope = 'default'
+    monkeypatch.setattr(web, 'LOGIN_PROCESSES', {'xiaohongshu': proc})
+    monkeypatch.setattr(web, '_LOGIN_START_LOCKS', {})
+    with pytest.raises(web.HTTPException) as exc:
+        asyncio.run(web.api_login_start('xiaohongshu', scope='community'))
+    assert exc.value.status_code == 409
+    proc.terminate.assert_not_called()
+
+
 @pytest.mark.parametrize("platform", ["xiaohongshu", "zhihu", "wechat-oa"])
 def test_login_start_returns_without_waiting_for_qr(tmp_path, monkeypatch, platform):
     monkeypatch.setattr(web, "LOGIN_DIR", tmp_path)

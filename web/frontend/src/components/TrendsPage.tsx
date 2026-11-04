@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { fetchTrends, fetchInsuranceTrends, createIdea, searchXhsNotes, readXhsNote } from '../lib/api';
+import { fetchTrends, fetchInsuranceTrends, createIdea, fetchXhsFeed, searchXhsNotes, readXhsNote, startLogin, loginStatus } from '../lib/api';
 import type { TrendGroup, TrendItem, XhsNote, XhsNotesPayload } from '../lib/api';
 import { IconFire, IconRefresh, IconBookmark, IconCheck, IconSearch } from './icons';
 import '../styles/mingya-xhs-notes.css';
@@ -90,7 +90,7 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
   const activeRequest = useRef<AbortController | null>(null);
   const industry = sourceClass === 'industry';
   const isXhs = sourceClass === 'xhs';
-  const xhs = useXhsNotes(persona, insurancePersona, isXhs, onReference);
+  const xhs = useXhsNotes(persona, insurancePersona, isXhs, onReference, insuranceScope);
   const normalizedQuery = query.trim().toLocaleLowerCase('zh-CN');
   const visibleGroups = groups.filter(group => !industry || industryFilter === 'all' || group.platform === industryFilter).map(group => ({
     ...group,
@@ -170,7 +170,7 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
   }, [load, selected, sourceClass]);
 
   const switchSource = (next: SourceClass) => {
-    if (next !== sourceClass) xhs.cancel();
+    if (next !== sourceClass) xhs.cancelNavigation();
     setSourceClass(next);
   };
   const toggle = (key: string) => {
@@ -180,25 +180,27 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
     } else setSelected(prev => prev.includes(key) ? prev.filter(value => value !== key) : [...prev, key]);
   };
   const changeScope = (value: boolean) => {
-    if (value !== insuranceScope) xhs.cancel();
+    if (value !== insuranceScope) xhs.cancelNavigation();
     setInsuranceScope(value);
   };
   const search = () => { if (isXhs) void xhs.search(); };
-  const refresh = () => { if (isXhs) void xhs.search(); else load(selected); };
-  const pending = isXhs ? xhs.searching || Boolean(xhs.busy) : loading;
+  const refresh = () => { if (isXhs) void xhs.refresh(); else load(selected); };
+  const pending = isXhs ? xhs.searching || xhs.connecting || Boolean(xhs.busy) : loading;
   const status = isXhs
     ? xhs.message || (xhs.searching ? '正在读取小红书内容，未自动重试…' : xhs.busy ? '正在读取可用正文，准备移交…'
+      : xhs.data?.source === 'xiaohongshu_homefeed' ? '小红书账号推荐；保险相关仅筛选当前推荐，不代表保险专属热榜。'
+      : !xhs.keyword.trim() && xhs.data?.query === '保险' ? '按当前保险 IP 自动加载内容参考；不代表已验证保险爆款榜。'
       : xhs.data?.cached ? '缓存内容参考；关键词搜索结果不代表已验证爆款榜。' : '小红书关键词内容参考；搜索结果不代表已验证爆款榜。')
     : error || (loading ? industry ? '正在读取行业动态…' : '正在读取热榜…'
-      : stale ? '当前显示缓存数据。' : industry ? '行业动态 / 政策资讯；来源与发布日期见各条资讯。'
-      : insuranceScope ? '按保险关键词匹配当前平台热榜；无匹配时保持空态。' : '当前平台热榜，搜索框仅筛选已读取的标题。');
+      : stale ? '当前显示缓存数据。' : industry ? '当前来源：行业资讯（行业动态 / 政策资讯）；来源与发布日期见各条资讯。'
+      : insuranceScope ? `当前来源：综合平台热榜；已读取 ${groups.reduce((sum, group) => sum + group.items.length, 0)} 条，保险匹配 ${visibleGroups.reduce((sum, group) => sum + group.items.length, 0)} 条。仅筛选本次总榜。` : '当前平台热榜，搜索框仅筛选已读取的标题。');
 
   return <div className="page-scroll trends-page trends-unified-page">
     <div className="trends-unified-container">
       <div className="page-head">
         <div><h1 className="page-title"><IconFire size={28} /> 热点雷达</h1>
           <p className="page-subtitle">从行业资讯和平台内容中寻找创作参考。</p></div>
-        <button className="btn btn-sm" onClick={refresh} disabled={pending || (isXhs && !xhs.keyword.trim())}>
+        <button className="btn btn-sm" onClick={refresh} disabled={pending}>
           <IconRefresh size={18} /> {pending ? '刷新中…' : '刷新'}</button>
       </div>
       <div className="trend-filter-panel">
@@ -208,7 +210,6 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
             <button className={`chip ${insuranceScope ? 'active' : ''}`} disabled={!insurancePersona} aria-pressed={insuranceScope} onClick={() => changeScope(true)}>保险相关</button>
             <button className={`chip ${!insuranceScope ? 'active' : ''}`} aria-pressed={!insuranceScope} onClick={() => changeScope(false)}>全部热点</button>
           </div>
-          <span className="trend-current-ip">当前 IP：{persona || '通用模式（未选择IP）'}</span>
         </div>
         <div className="trend-filter-row" data-filter-row="source" aria-label="数据来源">
           <strong className="trend-filter-label">数据来源：</strong>
@@ -219,7 +220,7 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
               aria-pressed={sourceClass === 'platforms' && selected.includes(platform.key)} onClick={() => toggle(platform.key)}>{platform.label}</button>)}
             <select className={`field trend-industry-select${industry ? ' active' : ''}`} aria-label="行业资讯来源"
               value={industry ? industryFilter : 'inactive'} onChange={event => { setIndustryFilter(event.target.value); switchSource('industry'); }}>
-              <option value="inactive" disabled>行业资讯</option><option value="all">行业资讯（全部）</option>
+              <option value="inactive" disabled>行业资讯</option><option value="all">已选：行业资讯（全部）</option>
               {INDUSTRY_SOURCES.map(source => <option value={source.key} key={source.key}>{source.label}</option>)}
             </select>
           </div>
@@ -231,14 +232,16 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
             value={isXhs ? xhs.keyword : query} maxLength={isXhs ? 100 : undefined}
             onChange={event => isXhs ? xhs.setKeyword(event.target.value) : setQuery(event.target.value)} /></label>
           <button className="btn btn-primary" type="submit" disabled={isXhs && (pending || !xhs.keyword.trim())}>{isXhs ? '搜索' : '筛选'}</button>
-          <span className="trend-search-hint">{isXhs ? '关键词可调整。' : '仅筛选当前已读取内容。'}</span>
+          <span className="trend-search-hint">{isXhs ? insuranceScope ? '按当前 IP 自动加载，可另行搜索。' : '默认加载账号推荐，可另行搜索。' : '仅筛选当前已读取内容。'}</span>
         </form>
       </div>
       <div className="trend-content-slot">
         <div className={`trend-status-line${isXhs ? xhs.message ? ' has-error' : '' : error ? ' has-error' : ''}`} role={isXhs ? xhs.message ? 'alert' : 'status' : error ? 'alert' : 'status'}>
           <span>{status}</span>
-          {isXhs ? xhs.data?.fetched_at && <time>{xhs.data.fetched_at}</time> : updated > 0 && <time>{new Date(updated * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新</time>}
+          {isXhs ? xhs.data?.fetched_at && <time dateTime={xhs.data.fetched_at} title={new Date(xhs.data.fetched_at).toLocaleString('zh-CN')}>{new Date(xhs.data.fetched_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新</time> : updated > 0 && <time>{new Date(updated * 1000).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })} 更新</time>}
           {isXhs && pending && <button className="btn btn-sm" onClick={xhs.cancel}>取消</button>}
+          {isXhs && (xhs.data?.error?.code === 'auth_required' || xhs.connecting) && <button className="btn btn-sm" disabled={xhs.connecting} onClick={xhs.connectRead}>
+            {xhs.connecting ? '正在连接读取账号…' : '重新连接读取账号'}</button>}
         </div>
         {isXhs ? xhs.content : (
       <div className="trend-grid">
@@ -256,7 +259,7 @@ export default function TrendsPage({ persona = '', personaDescription = '', onUs
                     : g.ok === false
                     ? industry ? '该来源暂时取不到（数据源不可用）' : '该平台暂时取不到（数据源不可用）'
                     : normalizedQuery || (insuranceScope && !industry)
-                    ? industry ? '未找到匹配行业动态' : insuranceScope ? '未找到匹配保险热点' : '未找到匹配热点'
+                    ? industry ? '未找到匹配行业动态' : insuranceScope ? `本次总榜 ${groups.find(group => group.platform === g.platform)?.items.length || 0} 条中未匹配保险内容` : '未找到匹配热点'
                     : industry ? '暂无行业动态，可刷新或查看全部热点' : '暂无数据'}
                 </div>
               )}
@@ -310,11 +313,18 @@ function xhsImageUrl(value: string): string | undefined {
   } catch { /* An invalid source is shown as an image failure, not text-only. */ }
 }
 
-function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolean, onReference?: (payload: XhsReferenceRequest) => void) {
-  const [keyword, setKeyword] = useState(insurancePersona ? '家庭保险' : '');
+function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolean, onReference?: (payload: XhsReferenceRequest) => void, insuranceScope = false) {
+  const [keyword, setKeyword] = useState('');
   const [data, setData] = useState<XhsNotesPayload | null>(null);
   const [searching, setSearching] = useState(false);
   const [message, setMessage] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const connectionRun = useRef(0);
+  const connectionStarting = useRef(false);
+  const connectionBusy = useRef(false);
+  const feedAttempted = useRef(false);
+  const feedInFlight = useRef(false);
+  const defaultSourceKey = useRef('');
   const [busy, setBusy] = useState('');
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
   const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
@@ -329,7 +339,66 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
   const currentPersona = useRef(persona);
   currentPersona.current = persona;
 
+  const invalidateConnection = () => {
+    connectionRun.current += 1; connectionStarting.current = false; connectionBusy.current = false;
+  };
+  const stopConnection = () => { invalidateConnection(); setConnecting(false); };
+  useEffect(() => () => { invalidateConnection(); }, []);
+  useEffect(() => {
+    if (!connecting) return;
+    const token = connectionRun.current;
+    let alive = true;
+    let polling = false;
+    const deadline = Date.now() + 180000;
+    const timer = setInterval(async () => {
+      if (!alive || token !== connectionRun.current) return;
+      if (Date.now() >= deadline) {
+        stopConnection(); setMessage('读取账号连接未确认；未自动重试，请查看登录窗口的提示。');
+        return;
+      }
+      if (polling || connectionStarting.current) return;
+      polling = true;
+      try {
+        const status = await loginStatus('xiaohongshu');
+        if (!alive || token !== connectionRun.current) return;
+        if (status.scope !== 'community') {
+          stopConnection(); setMessage('读取连接状态已变化，未确认成功；请重新连接读取账号。');
+          return;
+        }
+        setMessage(status.message || '请在弹出的官方浏览器窗口完成社区登录。');
+        if (status.state === 'success') {
+          stopConnection(); feedAttempted.current = false; setData(null);
+          setMessage('小红书读取连接已确认，正在加载推荐。');
+        } else if (['error', 'expired', 'unknown'].includes(status.state)) stopConnection();
+      } catch {
+        if (alive && token === connectionRun.current) { stopConnection(); setMessage('读取账号连接状态未确认，未自动重试；请查看官方登录窗口。'); }
+      } finally { polling = false; }
+    }, 2000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [connecting]);
+
+  const connectRead = async () => {
+    if (connectionBusy.current) return;
+    connectionStarting.current = true;
+    connectionBusy.current = true;
+    const token = ++connectionRun.current;
+    setConnecting(true); setMessage('正在打开官方社区登录，请保留弹出的浏览器窗口。');
+    try {
+      const status = await startLogin('xiaohongshu', 'community');
+      if (token !== connectionRun.current) return;
+      if (status.mode !== 'qr' || status.scope !== 'community' || ['error', 'expired', 'unknown'].includes(status.state || '')) {
+        stopConnection(); setMessage(status.message || '读取账号连接未启动或用途未确认，未自动重试。');
+      } else if (status.state === 'success') {
+        stopConnection(); feedAttempted.current = false; setData(null); setMessage('小红书读取连接已确认，正在加载推荐。');
+      } else setMessage(status.message || '请在弹出的官方浏览器窗口完成社区登录。');
+    } catch (error) {
+      if (token === connectionRun.current) { stopConnection(); setMessage(errorText(error) || '读取账号连接未启动，未自动重试。'); }
+    } finally { if (token === connectionRun.current) connectionStarting.current = false; }
+  };
+
   const cancel = () => {
+    stopConnection();
+    feedInFlight.current = false;
     generation.current += 1;
     active.current?.abort();
     active.current = null;
@@ -337,11 +406,16 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
     setSearching(false);
     setBusy('');
   };
+  const cancelNavigation = () => {
+    if (feedInFlight.current && !data) { feedAttempted.current = false; defaultSourceKey.current = ''; }
+    cancel();
+  };
   useEffect(() => {
-    setKeyword(insurancePersona ? '家庭保险' : '');
+    stopConnection();
+    setKeyword(''); feedAttempted.current = false; feedInFlight.current = false; defaultSourceKey.current = '';
     setData(null); setMessage(''); setFailedImages(new Set());
     setSearching(false); setBusy(''); actionLocked.current = false;
-    return () => { generation.current += 1; active.current?.abort(); actionLocked.current = false; };
+    return () => { invalidateConnection(); generation.current += 1; active.current?.abort(); actionLocked.current = false; };
   }, [persona, insurancePersona]);
   // Favorite writes belong to the persona lifecycle, not search/detail generations.
   useEffect(() => {
@@ -354,6 +428,7 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
 
   useEffect(() => {
     if (!enabled) {
+      stopConnection();
       generation.current += 1; active.current?.abort(); active.current = null;
       actionLocked.current = false; setSearching(false); setBusy('');
     }
@@ -361,7 +436,7 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
 
   const search = async () => {
     const q = keyword.trim();
-    if (!enabledRef.current || searching || actionLocked.current || !q) return;
+    if (!enabledRef.current || connectionBusy.current || (searching && !feedInFlight.current) || actionLocked.current || !q) return;
     cancel();
     const token = ++generation.current;
     const capturedPersona = persona;
@@ -384,6 +459,36 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
       }
     }
   };
+
+  const loadFeed = async () => {
+    if (!enabledRef.current || connectionBusy.current || actionLocked.current || feedInFlight.current) return;
+    cancel();
+    feedAttempted.current = true; feedInFlight.current = true;
+    defaultSourceKey.current = insurancePersona && insuranceScope ? 'insurance' : 'homefeed';
+    const token = ++generation.current;
+    const capturedPersona = persona;
+    const controller = new AbortController(); active.current = controller;
+    setSearching(true); setMessage(''); setData(null);
+    try {
+      const result = insurancePersona && insuranceScope
+        ? await searchXhsNotes('保险', controller.signal) : await fetchXhsFeed(controller.signal);
+      if (!enabledRef.current || token !== generation.current || capturedPersona !== currentPersona.current || controller.signal.aborted) return;
+      setData(result);
+      if (result.error) setMessage(result.error.message);
+    } catch (error) {
+      if (token === generation.current && !isAbortError(error)) setMessage(errorText(error) || '小红书推荐读取失败，未自动重试。');
+    } finally {
+      if (token === generation.current) { feedInFlight.current = false; setSearching(false); active.current = null; }
+    }
+  };
+  useEffect(() => {
+    const key = insurancePersona && insuranceScope ? 'insurance' : 'homefeed';
+    if (enabled && !connecting && ((!feedAttempted.current && !data)
+      || (!keyword.trim() && defaultSourceKey.current !== key))) void loadFeed();
+  }, [enabled, persona, connecting, data, insuranceScope]);
+  const refresh = () => keyword.trim() ? search() : loadFeed();
+  const visibleNotes = data?.source === 'xiaohongshu_homefeed' && insuranceScope
+    ? data.items.filter(note => INSURANCE_WORDS.test(`${note.title} ${note.body || ''}`)) : data?.items || [];
 
   const handleNoteAction = async (note: XhsNote, intent: XhsReferenceRequest['intent']) => {
     if (!enabledRef.current || actionLocked.current || !onReference) return;
@@ -444,13 +549,14 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
     } finally { pending.delete(note.id); }
   };
 
-  return { keyword, setKeyword, data, searching, message, busy, cancel, search,
+  return { keyword, setKeyword, data, searching, message, busy, cancel, cancelNavigation, search, refresh, connecting, connectRead,
     content: (
     <div className="xhs-note-list">
-      {!data?.items.length && <div className="card xhs-note-empty">{searching ? '正在读取内容…'
+      {!visibleNotes.length && <div className="card xhs-note-empty">{searching ? '正在读取内容…'
         : data?.error ? '当前没有可展示的内容，请按上方提示处理后再搜索。'
+        : data?.source === 'xiaohongshu_homefeed' && data.items.length ? '当前推荐中没有匹配的保险内容，可切换“全部热点”查看推荐，或输入关键词搜索。'
         : data ? '未找到匹配内容，可调整关键词后搜索。' : '输入或调整关键词，点击搜索后读取小红书内容。'}</div>}
-      {data?.items.map(note => {
+      {visibleNotes.map(note => {
         const image = note.images?.[0]; const safeImage = image && xhsImageUrl(image);
         const imageFailed = Boolean(image && (!safeImage || failedImages.has(note.id)));
         const url = xhsOriginalUrl(note.url);

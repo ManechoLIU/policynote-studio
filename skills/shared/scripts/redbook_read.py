@@ -30,8 +30,10 @@ class _Invalid(Exception):
 
 
 class _SessionError(Exception):
-    def __init__(self,code):
-        self.code=code if code in ('not_authenticated','profile_busy','timeout','cancelled','unknown_error') else 'unknown_error'
+    def __init__(self,code,stage=None):
+        self.stage = stage if stage in ('cookie_read','cookie_select','node_resolve','node_exit','json_parse','identity_shape') else None
+        self.code=code if code in ('not_authenticated','profile_busy','timeout','cancelled','unknown_error',
+                                  'verification_required','ip_blocked','signature_error','api_error') else 'unknown_error'
         super().__init__(self.code)
 
 
@@ -53,8 +55,8 @@ def _remaining(deadline):
 def _dependencies():
     sys.path.insert(0,str(Path(__file__).resolve().parent))
     from playwright.sync_api import sync_playwright
-    from xhs_publish import _ProfileLock, _launch, _profile_dir
-    return sync_playwright,_ProfileLock,_launch,_profile_dir
+    from xhs_publish import _ProfileLock, _launch, _profile_dir, _community_profile_base
+    return sync_playwright,_ProfileLock,_launch,_profile_dir,_community_profile_base
 
 
 def _select_cookies(rows):
@@ -87,8 +89,9 @@ def _select_cookies(rows):
 def _profile_cookie_string(deadline):
     # Leave five seconds for HTTP and two for orderly context/driver cleanup.
     if _remaining(deadline)<=7000:raise _SessionError('timeout')
-    factory,Lock,launch,profile_dir=_dependencies()
-    lock=Lock(profile_dir(None))
+    factory,Lock,launch,profile_dir,community_profile_base=_dependencies()
+    base=community_profile_base()
+    lock=Lock(profile_dir(base))
     locked=False
     try:
         try:lock.acquire(1)
@@ -102,7 +105,7 @@ def _profile_cookie_string(deadline):
         try:
             available=_remaining(deadline)-7000
             if available<=0:raise _SessionError('timeout')
-            context=launch(p,headed=False,base=None,proxy=None,login_assets=False,
+            context=launch(p,headed=False,base=base,proxy=None,login_assets=False,
                            timeout_ms=min(8000,available),retry_target_closed=False)
             _remaining(deadline)
             return _select_cookies(context.cookies('https://www.xiaohongshu.com'))
@@ -145,7 +148,7 @@ def _note_context(target):
     try:context=json.loads(raw)
     except (ValueError,TypeError):raise _Invalid() from None
     if (not isinstance(context,dict) or set(context)!= {'note_id','token','source','account_id'}
-            or context.get('source')!='pc_search'
+            or context.get('source') not in ('pc_search','pc_feed')
             or not isinstance(context.get('note_id'),str)
             or not re.fullmatch(r'[a-f0-9]{24}',context['note_id'])
             or target!='https://www.xiaohongshu.com/explore/'+context['note_id']
@@ -193,6 +196,11 @@ try {
 '''
 
 
+_FEED_BOOTSTRAP = _SEARCH_BOOTSTRAP.replace(
+    "client.searchNotes(process.env.EASEL_XHS_SEARCH_KEYWORD,1,20,'popularity_descending',0)",
+    "client.getHomeFeed('homefeed_recommend')")
+
+
 # Static code only: all per-note access context stays in the derived environment,
 # never OS argv. Use the original exported client and fixed mainland platform.
 _NOTE_READ_BOOTSTRAP=r'''
@@ -209,7 +217,7 @@ try {
   if (!me || me.guest!==false || me.user_id!==context.account_id) {
     process.stderr.write('Code: -100\n'); process.exitCode=1;
   } else {
-    const data=await client.getNoteById(context.note_id,context.token,'pc_search');
+    const data=await client.getNoteById(context.note_id,context.token,context.source);
     process.stdout.write(JSON.stringify(data)+'\n');
   }
 } catch(error) {
@@ -234,6 +242,8 @@ def _node():
 
 def _arguments(args):
     common=['--cookie-source','chrome','--platform','xhs','--json']
+    if args==['feed','--json']:
+        return 'feed',[]
     if args==['status','--json']:
         return 'status',['whoami',*common]
     if len(args)!=3 or args[0] not in ('search','read') or args[2]!='--json':
@@ -319,19 +329,53 @@ def _status(raw):
     return {'authenticated':True,'user':{'id':identity,'guest':False}}
 
 
+def community_status_from_context(context, timeout_s=6):
+    """Return False only for known unauthenticated state; fail closed otherwise."""
+    stage = 'cookie_read'
+    try:
+        deadline = time.monotonic() + max(0, min(float(timeout_s), 6))
+        rows = context.cookies('https://www.xiaohongshu.com')
+        stage = 'cookie_select'
+        header = _select_cookies(rows)
+        stage = 'node_resolve'
+        node = _node()
+        stage = 'node_exit'
+        code, stdout, stderr = _run([node, str(_ENTRY), 'whoami', '--cookie-source',
+                                     'chrome', '--platform', 'xhs', '--json'],
+                                    _child_env(header), deadline)
+        if code != 0:
+            raise _SessionError(_error_code(stderr))
+        stage = 'json_parse'
+        raw = json.loads(stdout.decode('utf-8'))
+        stage = 'identity_shape'
+        if isinstance(raw, dict) and raw.get('guest') is True:
+            return False
+        _status(raw)
+        return True
+    except _SessionError as error:
+        if error.code == 'not_authenticated':
+            return False
+        raise _SessionError(error.code, stage) from None
+    except Exception:
+        raise _SessionError('unknown_error', stage) from None
+
+
 def _main(args=None):
     try:
         operation,argv=_arguments(list(sys.argv[1:] if args is None else args))
         deadline=_deadline()
         node=_node()
         context=_note_context(argv[1]) if operation=='read' else None
-        expected_account=_expected_account() if operation=='search' else None
+        expected_account=_expected_account() if operation in ('search','feed') else None
         header=_profile_cookie_string(deadline)
         child_env=_child_env(header)
         command=[node,str(_ENTRY),*argv]
         if context:
             child_env['EASEL_XHS_NOTE_CONTEXT']=json.dumps(context,separators=(',',':'))
             command=[node,'--input-type=module','--eval',_NOTE_READ_BOOTSTRAP,str(_ENTRY)]
+        elif operation=='feed':
+            child_env['EASEL_XHS_EXPECTED_ACCOUNT']=expected_account
+            command=[node,'--input-type=module','--eval',_FEED_BOOTSTRAP,str(_ENTRY)]
         elif operation=='search':
             child_env['EASEL_XHS_EXPECTED_ACCOUNT']=expected_account
             child_env['EASEL_XHS_SEARCH_KEYWORD']=argv[1]

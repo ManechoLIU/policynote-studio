@@ -29,6 +29,8 @@ function setup(props = {}, pane = true) {
   const stateWrites = [];
   const references = [];
   const saves = [];
+  const timers = new Map();
+  let nextTimer = 0;
   const request = (kind, platforms, limit, signal) => {
     let resolve;
     let reject;
@@ -76,7 +78,10 @@ function setup(props = {}, pane = true) {
     },
     'react/jsx-runtime': { jsx: createElement, jsxs: createElement },
     '../lib/api': {
-      searchXhsNotes(query, signal) { return request('search', query, undefined, signal); },
+      fetchXhsFeed(signal) { return request('feed', undefined, undefined, signal); },
+      startLogin(platform, scope) { return request('connect', platform, scope); },
+      loginStatus(platform) { return request('login-status', platform); },
+      searchXhsNotes(query, signal) { return request(query === '保险' ? 'default-insurance' : 'search', query, undefined, signal); },
       readXhsNote(url, signal) { return request('detail', url, undefined, signal); },
       fetchTrends(platforms, limit, signal) {
         return request('general', platforms, limit, signal);
@@ -95,8 +100,15 @@ function setup(props = {}, pane = true) {
   };
   const pending = [];
   const exports = {};
-  runInNewContext(outputText, { exports, AbortController, URL, require: name => modules[name] });
+  runInNewContext(outputText, { exports, AbortController, URL, require: name => modules[name],
+    setInterval(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
+    clearInterval(id) { timers.delete(id); },
+  });
   return {
+    get connectionCalls() { return calls.filter(call => ['connect', 'login-status'].includes(call.kind)); },
+    get feedCalls() { return calls.filter(call => call.kind === 'feed'); },
+    get defaultCalls() { return calls.filter(call => ['feed', 'default-insurance'].includes(call.kind)); },
+    tickConnection() { return Promise.all([...timers.values()].map(callback => callback())); },
     get calls() { return pane ? calls.filter(call => ['search', 'detail'].includes(call.kind)) : calls; },
     saves,
     references,
@@ -115,6 +127,8 @@ function setup(props = {}, pane = true) {
       if (pane && !enteredXhs) {
         enteredXhs = true;
         button(tree, '小红书').props.onClick();
+        const selectedTree = this.render(props);
+        nodes(selectedTree).find(node => node.type === 'input' && node.props['aria-label'] === '小红书搜索关键词').props.onChange({ target: { value: '家庭保险' } });
         return this.render(props);
       }
       return tree;
@@ -161,13 +175,36 @@ const note = (extra = {}) => ({ id: '0123456789abcdef01234567', title: '家庭�
   content_status: 'summary', images: [], url: 'https://www.xiaohongshu.com/explore/0123456789abcdef01234567',
   author: null, published_at: null, metrics: { likes: null, saves: null, comments: null }, ...extra });
 const payload = (items = [note()], error = null) => ({ items, error, query: '家庭保险', cached: false, fetched_at: null, source: 'xiaohongshu_cli' });
+
+test('read reconnect is explicit, rejects creator-only success, and never automatically searches', async () => {
+  const app = setup();
+  const form = nodes(shown(app)).find(node => node.type === 'form');
+  form.props.onSubmit({ preventDefault() {} });
+  app.calls[0].resolve(payload([], { code: 'auth_required', message: '读取登录已失效', retryable: false }));
+  await settle();
+  for (const scope of ['default', 'community']) {
+    const connecting = button(shown(app), '重新连接读取账号').props.onClick();
+    const call = app.connectionCalls.at(-1);
+    assert.equal(call.kind, 'connect'); assert.equal(call.platforms, 'xiaohongshu'); assert.equal(call.limit, 'community');
+    call.resolve({ mode: 'qr', state: 'starting', scope: 'community' }); await connecting;
+    shown(app);
+    const tick = app.tickConnection();
+    app.connectionCalls.at(-1).resolve({ mode: 'qr', state: 'success', scope });
+    await tick;
+    const tree = shown(app);
+    if (scope === 'community') assert.equal(app.defaultCalls.length, 2);
+    else assert.match(text(tree), /未确认成功/);
+    assert.equal(app.calls.length, 1);
+  }
+  app.unmount();
+});
 async function results(app, items) {
   const form = nodes(shown(app)).find(n => n.type === 'form');
   form.props.onSubmit({ preventDefault() {} });
   app.calls.at(-1).resolve(payload(items)); await settle(); return shown(app);
 }
 
-test('no automatic CLI search on pane mount; explicit submit and duplicate submit are bounded', async () => {
+test('manual keyword submit and duplicate submit are bounded independently of default loading', async () => {
   const app = setup(); let tree = shown(app);
   assert.equal(app.calls.length, 0);
   const form = nodes(tree).find(n => n.type === 'form');
@@ -319,12 +356,31 @@ test('v2 uses one invariant header/filter/search/list shell and source switches 
   button(tree, '小红书').props.onClick(); tree = shown(app);
   assert.equal(nodes(tree).filter(n => n.props.className === 'page-head').length, 1);
   assert.equal(app.calls.some(c => c.kind === 'search'), false);
+  nodes(tree).find(n => n.type === 'input' && n.props['aria-label'] === '小红书搜索关键词').props.onChange({ target: { value: '家庭保险' } });
+  tree = shown(app);
   const form = nodes(tree).find(n => n.type === 'form'); form.props.onSubmit({ preventDefault() {} });
   app.calls.at(-1).resolve(payload()); await settle(); tree = shown(app);
   assert.match(text(tree), /家庭保障问题/);
   button(tree, '微博').props.onClick(); shown(app);
   button(shown(app), '小红书').props.onClick(); tree = shown(app);
   assert.match(text(tree), /家庭保障问题/); assert.equal(app.calls.filter(c => c.kind === 'search').length, 1);
+});
+
+test('selecting XHS loads the real recommendation feed once without a keyword or search click', async () => {
+  const app = setup({ persona: '' }, false);
+  button(shown(app), '小红书').props.onClick();
+  let tree = shown(app);
+  assert.equal(nodes(tree).find(n => n.type === 'input' && n.props['aria-label'] === '小红书搜索关键词').props.value, '');
+  assert.equal(app.feedCalls.length, 1);
+  assert.equal(app.calls.some(call => call.kind === 'search'), false);
+  app.feedCalls[0].resolve({ ...payload([note({ title: '家庭保险如何配置' })]), query: '', source: 'xiaohongshu_homefeed' });
+  await settle(); tree = shown(app);
+  assert.match(text(tree), /家庭保险如何配置/);
+  button(tree, '微博').props.onClick(); shown(app);
+  button(shown(app), '小红书').props.onClick(); tree = shown(app);
+  assert.equal(app.feedCalls.length, 1);
+  assert.match(text(tree), /家庭保险如何配置/);
+  app.unmount();
 });
 
 test('v2 insurance scope filters platform rows without returning unfiltered rankings or new requests', async () => {
@@ -336,7 +392,7 @@ test('v2 insurance scope filters platform rows without returning unfiltered rank
   assert.match(text(tree), /无关娱乐新闻/); assert.equal(app.calls.length, count);
   button(tree, '保险相关').props.onClick(); tree = shown(app);
   nodes(tree).find(n => n.type === 'input').props.onChange({ target: { value: '不存在' } });
-  tree = shown(app); assert.match(text(tree), /未找到匹配保险热点/); assert.equal(text(tree).includes('无关娱乐新闻'), false);
+  tree = shown(app); assert.match(text(tree), /本次总榜 2 条中未匹配保险内容/); assert.equal(text(tree).includes('无关娱乐新闻'), false);
 });
 
 test('v2 industry selection filters loaded groups locally; platforms remain independently selectable down to empty', async () => {
@@ -370,4 +426,19 @@ test('v2 switching sources cancels late detail handoff while preserving keyword 
   button(shown(app), '小红书').props.onClick(); tree = shown(app);
   assert.equal(nodes(tree).find(n => n.type === 'input').props.value, '理赔流程');
   assert.ok(button(tree, '已收藏').props.disabled); assert.equal(app.calls.filter(c => c.kind === 'search').length, 1);
+});
+
+
+test('insurance IP loads insurance references automatically with an empty search field', async () => {
+  const app = setup({ persona: '保险科普' }, false);
+  button(shown(app), '小红书').props.onClick();
+  let tree = shown(app);
+  assert.equal(nodes(tree).find(n => n.type === 'input' && n.props['aria-label'] === '小红书搜索关键词').props.value, '');
+  assert.equal(app.defaultCalls.length, 1);
+  assert.equal(app.defaultCalls[0].platforms, '保险');
+  app.defaultCalls[0].resolve({ ...payload([note({ title: '家庭保险如何配置' })]), query: '保险' });
+  await settle(); tree = shown(app);
+  assert.match(text(tree), /家庭保险如何配置/);
+  assert.match(text(tree), /按当前保险 IP 自动加载/);
+  app.unmount();
 });
