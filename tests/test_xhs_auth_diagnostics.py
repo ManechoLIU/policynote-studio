@@ -181,3 +181,80 @@ def test_publish_backend_preserves_marker_and_redacts_content_from_auth_failure_
     assert 'secret-' not in json.dumps(response) + (root / '_publish.log').read_text()
     assert 'https://creator.xiaohongshu.com/login' in (root / '_publish.log').read_text()
     assert (web.LOGIN_DIR / 'xiaohongshu.json').read_bytes() == initial
+
+
+@pytest.fixture
+def creator_wall_page(monkeypatch):
+    class Page:
+        url = ''
+        creator_url = 'https://creator.xiaohongshu.com/login'
+        creator_wall = True
+        failure = None
+
+        def __init__(self):
+            self.visited = []
+
+        def goto(self, destination, **kwargs):
+            self.visited.append(destination)
+            self.url = self.creator_url if destination == xhs.CREATOR_HOME_URL else 'https://www.xiaohongshu.com/website-login/error'
+            if self.failure == 'navigation' and destination == xhs.CREATOR_HOME_URL:
+                raise RuntimeError('secret-navigation-failure')
+
+        def query_selector_all(self, selector):
+            if self.failure == 'probe' and self.url == self.creator_url:
+                raise RuntimeError('secret-probe-failure')
+            return ([SimpleNamespace(is_visible=lambda: True)]
+                    if self.creator_wall and self.url == self.creator_url else [])
+
+    page = Page()
+    monkeypatch.setattr(xhs, '_verify_login', lambda *args, **kwargs: False)
+    monkeypatch.setattr(xhs, '_login_error', lambda current:
+                        'maintenance' if page.failure == 'maintenance' and current.url == page.creator_url else '')
+    return page
+
+
+def test_confirmed_creator_wall_is_not_overridden_by_unknown_web_fallback(creator_wall_page):
+    assert xhs._check_account_login(creator_wall_page) is False
+    assert creator_wall_page.visited == [xhs.CREATOR_HOME_URL]
+
+
+@pytest.mark.parametrize('uncertainty', ['nonofficial', 'no_wall', 'maintenance', 'navigation', 'probe'])
+def test_inconclusive_creator_probe_still_preserves_unknown(uncertainty, creator_wall_page):
+    if uncertainty == 'nonofficial':
+        creator_wall_page.creator_url = 'https://untrusted.example/login'
+    elif uncertainty == 'no_wall':
+        creator_wall_page.creator_wall = False
+    else:
+        creator_wall_page.failure = uncertainty
+    with pytest.raises(RuntimeError, match='登录校验暂未完成'):
+        xhs._check_account_login(creator_wall_page)
+
+
+@pytest.mark.parametrize('new_login', [False, True])
+def test_confirmed_creator_negative_uses_existing_cas_without_deleting_profile(
+        new_login, creator_wall_page, tmp_path, monkeypatch):
+    monkeypatch.setattr(web, 'LOGIN_DIR', tmp_path / '_login')
+    monkeypatch.setattr(web, 'BROWSER_PROFILES', tmp_path / 'profiles')
+    monkeypatch.setattr(web, 'LOGIN_PROCESSES', {})
+    monkeypatch.setattr(web, '_WHOAMI_TASKS', {})
+    monkeypatch.setattr(web, '_WHOAMI_LOCK', threading.Lock())
+    monkeypatch.setattr(web, '_WHOAMI_CACHE', {})
+    profile = web.BROWSER_PROFILES / 'XiaohongshuProfile'
+    profile.mkdir(parents=True)
+    sentinel = profile / 'offline-test-sentinel'
+    sentinel.write_text('keep profile')
+    web._write_login_marker('xiaohongshu', 'success', 'previous verified login')
+
+    def run(*args, **kwargs):
+        logged = xhs._check_account_login(creator_wall_page)
+        if new_login:
+            web._write_login_marker('xiaohongshu', 'success', 'new verified login')
+        return SimpleNamespace(returncode=0, stdout=json.dumps({'loggedIn': logged}), stderr='')
+
+    monkeypatch.setattr(web.subprocess, 'run', run)
+    result = asyncio.run(web.api_account_whoami('xiaohongshu', force=True))
+    assert result['loggedIn'] is new_login
+    assert (web.LOGIN_DIR / 'xiaohongshu.json').exists() is new_login
+    if not new_login:
+        assert web._WHOAMI_CACHE['xiaohongshu'][1]['loggedIn'] is False
+    assert sentinel.read_text() == 'keep profile'

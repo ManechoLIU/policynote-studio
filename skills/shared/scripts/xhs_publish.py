@@ -273,7 +273,7 @@ def _auth_error_type(error) -> str:
     name = type(error).__name__ if error is not None else 'UnknownError'
     return name if name in {
         'Error', 'TimeoutError', 'RuntimeError', 'ValueError', 'TypeError', 'OSError',
-        'ImportError', 'ModuleNotFoundError', 'PermissionError', 'ConnectionError', 'TargetClosedError',
+        'ImportError', 'ModuleNotFoundError', 'PermissionError', 'ConnectionError', 'TargetClosedError', 'SystemExit',
     } else 'UnknownError'
 
 
@@ -320,9 +320,11 @@ def _auth_snapshot(page, stage, *, login_ok=None, error=None, screenshot=False):
     return fields
 
 
-def _stop_publish_auth(page, *, login_ok, stage='publish_auth', error=None):
+def _stop_publish_auth(page, *, login_ok, stage='publish_auth', error=None, attempt=None):
     diagnostic = _auth_snapshot(page, stage, login_ok=login_ok, error=error, screenshot=True)
     code = 'XHS_AUTH_REQUIRED' if diagnostic['state'] == 'auth_required' else 'XHS_AUTH_UNKNOWN'
+    if attempt is not None:
+        attempt['terminal_reported'] = True
     print(json.dumps({'outcome': diagnostic['state'], 'published': False, 'error': code,
                       'stage': stage, 'error_type': diagnostic['error_type']}))
     _die('小红书创作平台要求登录，请在账号管理完成登录后再保存草稿' if code == 'XHS_AUTH_REQUIRED'
@@ -333,6 +335,36 @@ def _whoami_failure(result, stage, error, code='XHS_WHOAMI_UNCONFIRMED'):
     fields = {'error': code, 'stage': stage, 'error_type': _auth_error_type(error)}
     result.update(fields)
     print('XHS_AUTH_DIAGNOSTIC ' + json.dumps(fields), file=sys.stderr)
+
+
+def _publish_failure(attempt, error, *, cleanup=False):
+    """Only fixed metadata crosses the runner boundary; never exception text."""
+    action = attempt.get('action_sent', False)
+    safe = {'stage': 'cleanup' if cleanup else attempt['stage'], 'published': False,
+            'action_sent': action, 'confirmation_sent': attempt.get('confirmation_sent', False),
+            'error_type': _auth_error_type(error),
+            'errorCode': ('XHS_CLEANUP_FAILED' if cleanup else
+                          'XHS_DRAFT_STAGE_FAILED' if action is False else 'XHS_DRAFT_STAGE_UNCONFIRMED')}
+    if not cleanup and attempt.get('cleanup_error_type'):
+        safe['cleanup_error_type'] = attempt['cleanup_error_type']
+    if attempt.get('page') is not None:
+        safe['screenshot'] = _failure_screenshot(attempt['page'], 'stage-failure')
+    print('XHS_FAILURE_DIAGNOSTIC ' + json.dumps(safe), file=sys.stderr)
+    if not cleanup:
+        print(json.dumps({'outcome': 'failed', 'published': False, 'failureDiagnostic': safe}))
+
+
+def _publish_cleanup_error(attempt, error):
+    attempt['cleanup_error_type'] = _auth_error_type(error)
+    _publish_failure(attempt, error, cleanup=True)
+
+
+def _draft_action_attempt(attempt, *, confirmation=False):
+    if attempt is not None:
+        attempt['stage'] = 'confirmation' if confirmation else 'draft_action'
+        attempt['confirmation_sent' if confirmation else 'action_sent'] = None
+    _draft_button_diagnostic('draft_confirmation_attempt' if confirmation else 'draft_action_attempt',
+                             **{'confirmation_sent' if confirmation else 'action_sent': None})
 
 
 def _open_login_dialog(page) -> None:
@@ -515,7 +547,12 @@ def _check_account_login(page) -> bool:
                 return True
             outcomes.append("unknown" if _login_error(page) or not _visible_login_element(
                 page, SELECTORS["logged_out"]) else "logged_out")
-            _auth_snapshot(page, 'whoami_creator_page' if destination == CREATOR_HOME_URL else 'whoami_web_page')
+            diagnostic = _auth_snapshot(page, 'whoami_creator_page' if destination == CREATOR_HOME_URL else 'whoami_web_page')
+            # Account management connects publishing accounts. A proven creator
+            # login wall must not be masked by an unrelated web-site fallback.
+            if (destination == CREATOR_HOME_URL and outcomes[-1] == 'logged_out'
+                    and diagnostic['state'] == 'auth_required'):
+                return False
         except Exception as error:
             outcomes.append("unknown")
             _auth_snapshot(page, 'whoami_creator_page' if destination == CREATOR_HOME_URL else 'whoami_web_page', error=error)
@@ -1297,7 +1334,7 @@ def _draft_confirmation_button(dialog, document_marker):
     return affirmative[0][0], affirmative[0][1], prompt
 
 
-def _confirm_draft_dialog(page, document_marker) -> bool:
+def _confirm_draft_dialog(page, document_marker, attempt=None) -> bool:
     """One explicit save-draft confirmation; this is never a save receipt."""
     dialogs = _visible_draft_dialogs(page)
     if not dialogs:
@@ -1311,14 +1348,19 @@ def _confirm_draft_dialog(page, document_marker) -> bool:
         raise ValueError('confirmation changed before action')
     try:
         # Native semantic element click retains Playwright's overlay/hit checks.
+        _draft_action_attempt(attempt, confirmation=True)
         fresh.click(timeout=5000)
-    except Exception:
+    except Exception as error:
+        if attempt is not None:
+            attempt['primary_error'] = error
         raise _DraftActionUnknown('confirmation response unavailable') from None
     _draft_button_diagnostic('draft_confirmation_sent', label=label)
+    if attempt is not None:
+        attempt.update(stage='receipt', confirmation_sent=True)
     return True
 
 
-def _cdp_draft_state(session, candidate, *, click=False):
+def _cdp_draft_state(session, candidate, *, click=False, attempt=None):
     backend, host_backend, label = candidate
     objects = []
     try:
@@ -1328,12 +1370,16 @@ def _cdp_draft_state(session, candidate, *, click=False):
                 raise ValueError('node is unavailable')
             objects.append(remote['objectId'])
         try:
+            if click:
+                _draft_action_attempt(attempt)
             result = session.send('Runtime.callFunctionOn', {
                 'objectId': objects[0], 'functionDeclaration': _CDP_DRAFT_ACTION,
                 'arguments': [{'value': label}, {'value': click}, {'objectId': objects[1]}], 'returnByValue': True,
             })
-        except Exception:
+        except Exception as error:
             if click:
+                if attempt is not None:
+                    attempt['primary_error'] = error
                 raise _DraftActionUnknown('action response unavailable') from None
             raise
         if result.get('exceptionDetails'):
@@ -1366,7 +1412,7 @@ def _cdp_pick_draft(session):
     return visible[0][0]
 
 
-def _click_closed_shadow_draft(page) -> None:
+def _click_closed_shadow_draft(page, attempt=None) -> None:
     """Fail closed unless two fresh pierced trees and live button checks agree."""
     session = None
     try:
@@ -1376,7 +1422,7 @@ def _click_closed_shadow_draft(page) -> None:
         candidate = _cdp_pick_draft(session)
         if _cdp_pick_draft(session) != candidate:
             raise ValueError('draft node changed before click')
-        state = _cdp_draft_state(session, candidate, click=True)
+        state = _cdp_draft_state(session, candidate, click=True, attempt=attempt)
         if state.get('visible') is not True or state.get('enabled') is not True or state.get('clicked') is not True:
             raise ValueError('draft action was not verified')
         _draft_button_diagnostic('closed_shadow_clicked', label=candidate[2])
@@ -1384,6 +1430,8 @@ def _click_closed_shadow_draft(page) -> None:
         _draft_button_diagnostic('closed_shadow_result_unknown')
         _die('草稿保存结果未确认：安全草稿操作已发送但结果未知，请先核对平台草稿；不会自动重试')
     except Exception as error:
+        if attempt is not None:
+            attempt['primary_error'] = error
         _draft_button_diagnostic('closed_shadow_blocked', error_type=type(error).__name__)
         _die('未能安全确认闭合 Shadow DOM 内唯一可用的草稿按钮；已停止，不会公开发布')
     finally:
@@ -1394,7 +1442,7 @@ def _click_closed_shadow_draft(page) -> None:
                 pass
 
 
-def _save_draft(page, timeout_s: float = 30) -> None:
+def _save_draft(page, timeout_s: float = 30, *, attempt=None) -> None:
     """Semantic light/closed-shadow draft action followed by a separate receipt gate."""
     # Whole-body text is ONLY a veto. Hidden or copied old success text cannot
     # become fresh evidence when made visible, moved, or cloned after the click.
@@ -1412,6 +1460,8 @@ def _save_draft(page, timeout_s: float = 30) -> None:
                 old.evaluate(_DRAFT_NOTICE_DOCUMENT, document_marker) != 'same' for old in previous):
             raise ValueError('baseline document changed')
     except Exception as error:
+        if attempt is not None:
+            attempt['primary_error'] = error
         _draft_button_diagnostic('receipt_baseline_unavailable', error_type=type(error).__name__)
         _die("点击前无法确认草稿通知所属文档；未执行保存")
     deadline = time.monotonic() + timeout_s
@@ -1431,12 +1481,17 @@ def _save_draft(page, timeout_s: float = 30) -> None:
         if page.evaluate(_DRAFT_DOCUMENT_CURRENT, document_marker) is not True:
             raise ValueError('action document changed')
     except Exception as error:
+        if attempt is not None:
+            attempt['primary_error'] = error
         _draft_button_diagnostic('receipt_baseline_unavailable', error_type=type(error).__name__)
         _die("点击前草稿编辑文档已改变或不可确认；未执行保存")
     if button is not None:
+        _draft_action_attempt(attempt)
         button.click(timeout=5000)
     else:
-        _click_closed_shadow_draft(page)
+        _click_closed_shadow_draft(page, attempt=attempt)
+    if attempt is not None:
+        attempt.update(stage='receipt', action_sent=True)
     _draft_button_diagnostic('draft_action_sent')
     deadline = time.monotonic() + timeout_s
     receipt_error_logged = False
@@ -1446,7 +1501,7 @@ def _save_draft(page, timeout_s: float = 30) -> None:
             if _draft_success_visible(page, previous, document_marker):
                 print("✅ 已检测到平台明确草稿保存成功提示", file=sys.stderr)
                 return
-            if not confirmation_sent and _confirm_draft_dialog(page, document_marker):
+            if not confirmation_sent and _confirm_draft_dialog(page, document_marker, attempt=attempt):
                 confirmation_sent = True
                 continue
         except _DraftActionUnknown:
@@ -1465,21 +1520,28 @@ def _save_draft(page, timeout_s: float = 30) -> None:
         time.sleep(0.2)
 
 
-def _fill_and_save_draft(page, title, content, tags):
+def _fill_and_save_draft(page, title, content, tags, *, attempt=None):
     _fill_editor(page, title, content, tags)
-    _save_draft(page)
+    if attempt is not None:
+        attempt['stage'] = 'draft_prepare'
+    _save_draft(page, attempt=attempt)
+    if attempt is not None:
+        attempt['receipt_confirmed'] = True
 
 
 # --------------------------------------------------------------------------- #
 # 命令
 # --------------------------------------------------------------------------- #
-def _launch(p, headed: bool, base: str | None, proxy: str | None, *, login_assets: bool = True):
+def _launch(p, headed: bool, base: str | None, proxy: str | None, *, login_assets: bool = True,
+            timeout_ms: int | None = None, retry_target_closed: bool = True):
     profile = _profile_dir(base)
     profile.mkdir(parents=True, exist_ok=True)
     args = list(LAUNCH_ARGS)
     kwargs = dict(headless=not headed,
                   locale="zh-CN",
                   args=args)
+    if timeout_ms is not None:
+        kwargs['timeout'] = timeout_ms
     if proxy:
         kwargs["proxy"] = {"server": proxy}
     else:
@@ -1493,7 +1555,7 @@ def _launch(p, headed: bool, base: str | None, proxy: str | None, *, login_asset
         if channel:
             kwargs["channel"] = channel
     last: Exception | None = None
-    for attempt in range(2):
+    for attempt in range(2 if retry_target_closed else 1):
         try:
             context = p.chromium.launch_persistent_context(str(profile), **kwargs)
             if login_assets:
@@ -1501,7 +1563,7 @@ def _launch(p, headed: bool, base: str | None, proxy: str | None, *, login_asset
             return context
         except Exception as e:
             last = e
-            if attempt == 0 and "TargetClosed" in type(e).__name__:
+            if retry_target_closed and attempt == 0 and "TargetClosed" in type(e).__name__:
                 time.sleep(1.2)
                 _clear_stale_chrome_locks(profile)
                 continue
@@ -1597,7 +1659,7 @@ def cmd_login(a) -> int:
                 if a.headed:
                     login_state.write_status(
                         sf, "window_login",
-                        "请在弹出的 CloakBrowser 窗口里扫码，不要关掉那个窗口。")
+                        "请在弹出的浏览器窗口里扫码，不要关掉那个窗口。")
                 explore_failed = False
                 try:
                     page.goto(EXPLORE_URL, wait_until="commit", timeout=30000)
@@ -1635,12 +1697,12 @@ def cmd_login(a) -> int:
                         raise
                     login_state.write_status(
                         sf, "window_login",
-                        f"{error}。请在弹出的 CloakBrowser 窗口里完成登录（扫码或短信），不要关掉那个窗口。")
+                        f"{error}。请在弹出的浏览器窗口里完成登录（扫码或短信），不要关掉那个窗口。")
                 if qr:
                     if a.headed:
                         login_state.write_status(
                             sf, "window_login",
-                            "请在弹出的 CloakBrowser 窗口里扫码，不要关掉那个窗口。也可以扫下面这张图。",
+                            "请在弹出的浏览器窗口里扫码，不要关掉那个窗口。也可以扫下面这张图。",
                             qr=str(qr_out))
                     else:
                         login_state.write_status(sf, "qr_ready", "二维码已就绪，请扫码", qr=str(qr_out))
@@ -1750,7 +1812,7 @@ def cmd_plan(a) -> int:
     return 0
 
 
-def _publish(a, kind: str) -> int:
+def _publish_impl(a, kind: str, attempt) -> int:
     if not a.title:
         _die("--title 必填")
     if calc_title_length(a.title) > TITLE_MAX:
@@ -1778,26 +1840,38 @@ def _publish(a, kind: str) -> int:
             print(ln)
         return 0
 
+    attempt['stage'] = 'runtime'
     try:
         from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
     except Exception as e:
-        _die(f"需要 playwright：{e}", 3)
+        attempt['primary_error'] = e
+        _die('需要 Playwright 运行环境，无法启动草稿流程', 3)
+    attempt['stage'] = 'profile_lock'
     lock = _ProfileLock(_profile_dir(a.profile_base))
     try:
         lock.acquire(90)
-    except TimeoutError:
+    except TimeoutError as error:
+        attempt['primary_error'] = error
         _die("小红书登录目录正被占用，请稍后再保存草稿")
     try:
+        attempt['stage'] = 'launch'
         with sync_playwright() as p:
-            ctx = _launch(p, headed=a.headed, base=a.profile_base, proxy=_proxy(a.proxy, a.no_proxy))
-            page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.set_default_timeout(300000)
             try:
+                ctx = _launch(p, headed=a.headed, base=a.profile_base, proxy=_proxy(a.proxy, a.no_proxy))
+                page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                attempt['page'] = page
+                page.set_default_timeout(300000)
+            except (Exception, SystemExit) as error:
+                attempt.setdefault('primary_error', error)
+                raise
+            try:
+                attempt['stage'] = 'navigation'
                 try:
                     page.goto(PUBLISH_URL, wait_until="domcontentloaded")
                 except Exception as error:
-                    _stop_publish_auth(page, login_ok=None, stage='publish_navigation', error=error)
+                    _stop_publish_auth(page, login_ok=None, stage='publish_navigation', error=error, attempt=attempt)
                 page.wait_for_timeout(1500)
+                attempt['stage'] = 'auth_probe'
                 # Keep failed probe evidence local: unreadable DOM is not an
                 # authenticated negative, even if a later login wall is visible.
                 logged = False
@@ -1811,26 +1885,61 @@ def _publish(a, kind: str) -> int:
                         probe_error = error
                     page.wait_for_timeout(500)
                 if not logged and "login" in page.url.lower():
-                    _stop_publish_auth(page, login_ok=logged, error=probe_error)
+                    _stop_publish_auth(page, login_ok=logged, error=probe_error, attempt=attempt)
+                attempt['stage'] = 'tab'
                 if kind == "image":
                     _click_publish_tab(page, "上传图文")
                     page.wait_for_timeout(1000)
+                    attempt['stage'] = 'upload'
                     _upload_images(page, media)
                 else:
                     _click_publish_tab(page, "上传视频")
                     page.wait_for_timeout(1000)
+                    attempt['stage'] = 'upload'
                     _upload_video(page, media[0])
-                _fill_and_save_draft(page, a.title, a.content or "", tags)
+                attempt['stage'] = 'fill'
+                _fill_and_save_draft(page, a.title, a.content or "", tags, attempt=attempt)
             except PWTimeout as e:
-                _die(f"步骤超时（选择器可能已失效，检查 SELECTORS）：{e}")
+                attempt['primary_error'] = e
+                _die('小红书草稿步骤超时；请先核对平台草稿，勿重复提交')
+            except (Exception, SystemExit) as error:
+                attempt.setdefault('primary_error', error)
+                raise
             finally:
                 if not a.keep_open:
-                    ctx.close()
+                    try:
+                        ctx.close()
+                    except Exception as error:
+                        _publish_cleanup_error(attempt, error)
     finally:
-        lock.release()
+        try:
+            lock.release()
+        except Exception as error:
+            _publish_cleanup_error(attempt, error)
     # 草稿不是已发布内容，绝不调用 calendar_ops.record_publish。
     print(json.dumps({"outcome": "draft_saved", "published": False}, ensure_ascii=False))
     return 0
+
+
+def _publish(a, kind: str) -> int:
+    attempt = {'stage': 'prepare', 'action_sent': False, 'confirmation_sent': False}
+    try:
+        return _publish_impl(a, kind, attempt)
+    except (Exception, SystemExit) as error:
+        primary = attempt.get('primary_error', error)
+        if primary is not error and not isinstance(error, SystemExit):
+            _publish_cleanup_error(attempt, error)
+        if attempt.get('receipt_confirmed'):
+            _publish_cleanup_error(attempt, error)
+            print(json.dumps({'outcome': 'draft_saved', 'published': False}))
+            return 0
+        if not attempt.get('terminal_reported'):
+            _publish_failure(attempt, primary)
+        if isinstance(primary, SystemExit):
+            raise primary
+        if isinstance(error, SystemExit):
+            raise
+        _die('小红书草稿步骤失败；请先核对平台草稿，勿重复提交')
 
 
 def cmd_publish(a) -> int:

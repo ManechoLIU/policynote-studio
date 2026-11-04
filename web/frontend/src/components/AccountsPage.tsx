@@ -14,7 +14,7 @@ import { getWhoamiCache, setWhoamiCache, verifyStale } from '../lib/whoami';
 type QRState = {
   platform: string;
   name: string;
-  state: string;       // starting | qr_ready | success | expired | error | unknown
+  state: string;       // starting | window_login | qr_ready | success | expired | error | unknown
   message: string;
   qr: string;          // outputs 相对路径
   qrTs?: number;       // 二维码文件 mtime，作 img 缓存键：码刷新一次就变，避免看到过期旧码
@@ -23,6 +23,7 @@ type QRState = {
 const STATE_LABEL: Record<string, string> = {
   starting: '启动中…',
   qr_ready: '请扫码',
+  window_login: '等待浏览器登录',
   scanned: '扫码成功',
   sms_required: '需短信验证',
   verifying: '验证中…',
@@ -467,7 +468,7 @@ export default function AccountsPage() {
             <div style={{ fontSize: 13, marginBottom: 14,
               color: qr.state === 'success' ? 'var(--green)'
                 : ['error', 'expired'].includes(qr.state) ? 'var(--red)' : 'var(--text-secondary)' }}>
-              {STATE_LABEL[qr.state] || qr.state}{qr.message ? ` — ${qr.message}` : ''}
+              {STATE_LABEL[qr.state] || qr.state}{qr.message && !['error', 'expired', 'sms_required'].includes(qr.state) ? ` — ${qr.message}` : ''}
             </div>
             {qr.state === 'sms_required' ? (
               <div style={{ padding: '6px 4px 2px' }}>
@@ -490,8 +491,12 @@ export default function AccountsPage() {
                   {smsBusy ? '提交中…' : '提交验证码'}
                 </button>
               </div>
-            ) : qr.state === 'qr_ready' && qr.qr ? (
+            ) : ['qr_ready', 'window_login'].includes(qr.state) && qr.qr ? (
               <img className="qr-img" src={`${mediaUrl(qr.qr)}?v=${qr.qrTs || qrNonce}`} alt="登录二维码" />
+            ) : qr.state === 'window_login' ? (
+              <div className="loading" style={{ padding: 40 }}><div className="spinner" />
+                请在弹出的官方浏览器窗口完成登录，正在等待平台确认…
+              </div>
             ) : qr.state === 'scanned' ? (
               <div className="loading" style={{ padding: 40 }}><div className="spinner" />
                 {qr.message || '扫码成功，请在手机上确认登录，正在等待平台验证…'}
@@ -501,8 +506,8 @@ export default function AccountsPage() {
             ) : qr.state === 'success' ? (
               <div style={{ fontSize: 48, padding: 40 }}>✅</div>
             ) : ['error', 'expired'].includes(qr.state) ? (
-              <div style={{ fontSize: 13, color: 'var(--red)', padding: 30 }}>
-                {qr.message || '登录失败'}<br />请根据上方具体原因排查；可关闭后重试，日志在 outputs/_login/。
+              <div style={{ fontSize: 13, color: 'var(--red)', padding: '12px 0', lineHeight: 1.7, textAlign: 'left' }}>
+                {qr.message || '登录未完成，请稍后重新连接。'}
               </div>
             ) : (
               <div className="loading" style={{ padding: 40 }}><div className="spinner" />准备二维码…</div>

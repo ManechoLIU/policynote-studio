@@ -4337,6 +4337,8 @@ async def _start_login(platform: str, restart: bool = False):
     if backend == 'xhs':
         cmd = [sys.executable, str(SHARED_SCRIPTS / 'xhs_publish.py'), 'login', '--no-proxy',
                '--qr-out', str(qr), '--status-file', str(status), '--timeout', str(LOGIN_TIMEOUT)]
+        if sys.platform == 'darwin':
+            cmd.append('--headed')
     elif backend == 'biliup':
         # B站：TV 端扫码登录 API 生成二维码 + 写 biliup cookie（biliup login 需真终端，前端用不了）
         cmd = [sys.executable, str(SHARED_SCRIPTS / 'bili_login.py'), 'login',
@@ -4560,7 +4562,7 @@ def _xhs_safe_auth_failure(payload=None, stage='whoami_result') -> dict:
               'whoami_page', 'whoami_close', 'whoami_result', 'whoami_runner',
               'whoami_creator_page', 'whoami_web_page', 'publish_auth', 'publish_navigation'}
     types = {'Error', 'TimeoutError', 'TimeoutExpired', 'RuntimeError', 'ValueError', 'TypeError',
-             'OSError', 'ImportError', 'ModuleNotFoundError', 'PermissionError', 'ConnectionError', 'TargetClosedError'}
+             'OSError', 'ImportError', 'ModuleNotFoundError', 'PermissionError', 'ConnectionError', 'TargetClosedError', 'SystemExit'}
     code = payload.get('error')
     reported_stage, error_type = payload.get('stage'), payload.get('error_type')
     return {'errorCode': code if isinstance(code, str) and code in codes else 'XHS_WHOAMI_UNCONFIRMED',
@@ -4579,6 +4581,31 @@ def _xhs_whoami_failure_http(payload=None, *, stage='whoami_result', status=502)
         'X-XHS-Auth-Error-Type': safe['error_type']})
 
 
+def _xhs_safe_failure_diagnostic(payload):
+    stages = {'prepare', 'runtime', 'profile_lock', 'launch', 'navigation', 'auth_probe',
+              'tab', 'upload', 'fill', 'draft_prepare', 'draft_action', 'confirmation', 'receipt', 'cleanup'}
+    codes = {'XHS_DRAFT_STAGE_FAILED', 'XHS_DRAFT_STAGE_UNCONFIRMED', 'XHS_CLEANUP_FAILED'}
+    if (not isinstance(payload, dict) or not isinstance(payload.get('stage'), str)
+            or payload['stage'] not in stages or not isinstance(payload.get('errorCode'), str)
+            or payload['errorCode'] not in codes or payload.get('published') is not False
+            or any(key not in payload or (payload[key] is not None and type(payload[key]) is not bool)
+                   for key in ('action_sent', 'confirmation_sent'))):
+        return None
+    safe = {key: payload[key] for key in ('stage', 'errorCode', 'published', 'action_sent', 'confirmation_sent')}
+    safe['error_type'] = _xhs_safe_auth_failure(payload)['error_type']
+    if 'cleanup_error_type' in payload:
+        safe['cleanup_error_type'] = _xhs_safe_auth_failure({'error_type': payload['cleanup_error_type']})['error_type']
+    try:
+        if isinstance(payload.get('screenshot'), str):
+            path = Path(payload['screenshot']).resolve()
+            if (path.parent == (OUTPUTS_DIR / '_runtime' / 'draft-r1').resolve()
+                    and re.fullmatch(r'stage-failure-[0-9]+\.png', path.name)):
+                safe['screenshot'] = str(path)
+    except (ValueError, OSError):
+        pass
+    return safe
+
+
 def _xhs_safe_runner_diagnostics(stderr):
     """Keep structured runner evidence, never raw exceptions or request content."""
     labels = {'暂存离开', '存草稿', '保存草稿', '发布', '确认', '确定', '确认发布', '立即发布', '取消',
@@ -4590,13 +4617,18 @@ def _xhs_safe_runner_diagnostics(stderr):
               'closed_shadow_result_unknown', 'closed_shadow_blocked', 'receipt_baseline_unavailable',
               'receipt_unavailable', 'receipt_timeout', 'draft_confirmation_sent',
               'draft_confirmation_result_unknown', 'draft_action_sent', 'publish_auth', 'publish_navigation',
-              'whoami_creator_page', 'whoami_web_page'}
+              'whoami_creator_page', 'whoami_web_page', 'draft_action_attempt', 'draft_confirmation_attempt'}
     for line in (stderr or '').splitlines():
         prefix, _, raw = line.partition(' ')
-        if prefix not in ('XHS_AUTH_DIAGNOSTIC', 'XHS_DRAFT_DIAGNOSTIC'):
+        if prefix not in ('XHS_AUTH_DIAGNOSTIC', 'XHS_DRAFT_DIAGNOSTIC', 'XHS_FAILURE_DIAGNOSTIC'):
             continue
         try:
             data = json.loads(raw)
+            if prefix == 'XHS_FAILURE_DIAGNOSTIC':
+                safe = _xhs_safe_failure_diagnostic(data)
+                if safe is not None:
+                    yield prefix, safe
+                continue
             if not isinstance(data, dict) or data.get('stage') not in stages:
                 continue
             safe = {'stage': data['stage']}
@@ -5162,6 +5194,7 @@ async def api_publish(platform: str, req: PublishRequest):
     tail = (proc.stderr or proc.stdout or '').strip().splitlines()
     detail = '\n'.join(tail[-8:])
     auth_diagnostic = None
+    failure_diagnostic = None
     if platform == 'xiaohongshu':
         # Exit zero alone proves neither a platform draft nor a public publish.
         # Only the runner's final structured draft receipt can confirm this action.
@@ -5180,6 +5213,11 @@ async def api_publish(platform: str, req: PublishRequest):
             state = receipt.get('outcome')
             if isinstance(state, str) and state in auth_codes and receipt.get('error') == auth_codes[state]:
                 auth_diagnostic = {**_xhs_safe_auth_failure(receipt, 'publish_auth'), 'state': state}
+            failure_diagnostic = _xhs_safe_failure_diagnostic(receipt.get('failureDiagnostic'))
+        safe_runner_diagnostics = list(_xhs_safe_runner_diagnostics(proc.stderr))
+        if failure_diagnostic is None:
+            failure_diagnostic = next((safe for prefix, safe in reversed(safe_runner_diagnostics)
+                                       if prefix == 'XHS_FAILURE_DIAGNOSTIC'), None)
         # The detailed console stream can contain page URLs or exception payloads.
         detail = ('已获得平台明确草稿保存确认' if ok else
                   '本次未获得平台草稿保存确认；请根据安全错误原因处理，勿重复提交')
@@ -5188,9 +5226,9 @@ async def api_publish(platform: str, req: PublishRequest):
             lf.write(f"\n===== {time.strftime('%Y-%m-%d %H:%M:%S')} {platform} rc={proc.returncode} ok={ok} =====\n")
             if platform == 'xiaohongshu':
                 lf.write('MODE: draft_only\nRESULT: ' + json.dumps({
-                    'ok': ok, 'authDiagnostic': auth_diagnostic,
+                    'ok': ok, 'authDiagnostic': auth_diagnostic, 'failureDiagnostic': failure_diagnostic,
                     'outcome': 'draft_saved' if ok else 'failed'}, ensure_ascii=False) + '\n')
-                for prefix, safe in _xhs_safe_runner_diagnostics(proc.stderr):
+                for prefix, safe in safe_runner_diagnostics:
                     lf.write(prefix + ' ' + json.dumps(safe, ensure_ascii=False) + '\n')
             else:
                 lf.write('CMD: ' + ' '.join(cmd) + '\n')
@@ -5211,6 +5249,8 @@ async def api_publish(platform: str, req: PublishRequest):
     if platform == 'xiaohongshu':
         response = {'ok': ok, 'published': False, 'outcome': 'draft_saved' if ok else 'failed',
                     'message': '已保存至小红书草稿，未公开发布', 'detail': detail}
+        if failure_diagnostic:
+            response['failureDiagnostic'] = failure_diagnostic
         if not ok:
             # Show only mapped user-facing causes, never file paths/tracebacks.
             runner_error = '\n'.join(line for line in (proc.stderr or '').splitlines()
@@ -5228,6 +5268,8 @@ async def api_publish(platform: str, req: PublishRequest):
                     message = '小红书创作平台要求登录，请到账号管理完成登录'
                 else:
                     code, message = 'DRAFT_SAVE_UNCONFIRMED', '小红书认证状态尚未确认，请稍后校验账号'
+            elif failure_diagnostic and failure_diagnostic['action_sent'] is not False:
+                code, message = 'DRAFT_SAVE_UNCONFIRMED', '小红书草稿保存结果尚未确认'
             response.update(errorCode=code, message=message)
         return response
     return {'ok': ok, 'message': '发布成功' if ok else '发布失败（见 detail）', 'detail': detail}

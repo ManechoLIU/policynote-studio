@@ -221,3 +221,65 @@ for (const handler of ['handleLogin', 'handleMpLogin']) {
     await second;
   });
 }
+
+// Render the actual QR modal subtree; no copied state-label table or mirrored branch logic.
+const stateLabels = parsed.statements.find(node => ts.isVariableStatement(node)
+  && node.declarationList.declarations.some(declaration => declaration.name.getText(parsed) === 'STATE_LABEL'));
+let qrModal;
+function findQrModal(node) {
+  if (ts.isJsxExpression(node) && node.expression && ts.isBinaryExpression(node.expression)
+    && node.expression.left.getText(parsed) === 'qr') qrModal = node.expression;
+  ts.forEachChild(node, findQrModal);
+}
+findQrModal(component);
+assert.ok(qrModal);
+const modalCode = ts.transpileModule(`${stateLabels.getText(parsed)}\nfunction render(qr) { return (${qrModal.getText(parsed)}); }\nrender;`, {
+  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX },
+}).outputText;
+const renderModal = runInNewContext(modalCode, {
+  exports: {}, qrNonce: 7, smsCode: '', smsErr: '', smsBusy: false,
+  mediaUrl: path => `/media/${path}`, closeQr() {}, submitSms() {},
+  require: () => ({ jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) }),
+});
+function modalNodes(tree) {
+  if (Array.isArray(tree)) return tree.flatMap(modalNodes);
+  if (!tree || typeof tree !== 'object') return [];
+  return [tree, ...modalNodes(tree.props?.children)];
+}
+function modalText(tree) {
+  if (Array.isArray(tree)) return tree.map(modalText).join('');
+  if (typeof tree === 'string' || typeof tree === 'number') return String(tree);
+  return tree && typeof tree === 'object' ? modalText(tree.props?.children) : '';
+}
+const loginState = (state, extra = {}) => ({ state, platform: 'xiaohongshu', name: '小红书', message: '', qr: '', ...extra });
+
+test('window_login without QR explains official browser confirmation without spinning for a QR or claiming success', () => {
+  const tree = renderModal(loginState('window_login'));
+  const copy = modalText(tree);
+  assert.match(copy, /浏览器/); assert.match(copy, /官方浏览器窗口完成登录/); assert.match(copy, /等待.*确认/);
+  assert.equal(/window_login|准备二维码|登录成功/.test(copy), false);
+  assert.equal(modalNodes(tree).some(node => node.type === 'img'), false);
+  assert.equal(modalNodes(tree).some(node => node.type === 'button' && modalText(node) === '关闭'), true);
+});
+
+test('window_login with QR uses the existing QR image and cache key without claiming terminal success', () => {
+  const tree = renderModal(loginState('window_login', { qr: '_login/xhs.png', qrTs: 321 }));
+  const image = modalNodes(tree).find(node => node.type === 'img');
+  assert.ok(image); assert.equal(image.props.className, 'qr-img');
+  assert.equal(image.props.src, '/media/_login/xhs.png?v=321'); assert.equal(image.props.alt, '登录二维码');
+  assert.equal(/window_login|准备二维码|登录成功/.test(modalText(tree)), false);
+});
+
+test('existing QR, SMS, scanned, expired, error and success modal controls remain available', () => {
+  assert.equal(modalNodes(renderModal(loginState('qr_ready', { qr: 'qr.png' }))).find(node => node.type === 'img').props.src, '/media/qr.png?v=7');
+  const sms = renderModal(loginState('sms_required'));
+  assert.ok(modalNodes(sms).find(node => node.type === 'input' && node.props.inputMode === 'numeric'));
+  assert.ok(modalNodes(sms).find(node => node.type === 'button' && modalText(node) === '提交验证码'));
+  assert.match(modalText(renderModal(loginState('scanned'))), /手机上确认登录/);
+  assert.match(modalText(renderModal(loginState('verifying'))), /正在验证验证码/);
+  for (const state of ['expired', 'error']) {
+    const copy = modalText(renderModal(loginState(state, { message: '唯一错误说明' })));
+    assert.equal(copy.split('唯一错误说明').length - 1, 1, 'preserve existing error-copy deduplication');
+  }
+  assert.ok(modalNodes(renderModal(loginState('success'))).find(node => node.type === 'button' && modalText(node) === '完成'));
+});

@@ -865,3 +865,31 @@ def test_web_login_sets_child_utf8_without_changing_parent_env(tmp_path, monkeyp
     assert original["PYTHONIOENCODING"] == "gbk"
     assert child_env["https_proxy"] == "test-proxy"
     assert popen.call_args.kwargs["stdout"].closed
+
+
+@pytest.mark.parametrize('runtime,platform,backend,headed', [
+    ('darwin', 'xiaohongshu', 'xhs', True),
+    ('linux', 'xiaohongshu', 'xhs', False),
+    ('win32', 'xiaohongshu', 'xhs', False),
+    ('darwin', 'douyin', 'douyin', False),
+    ('darwin', 'zhihu', 'web', False),
+])
+def test_account_login_uses_headed_only_for_macos_xhs(runtime, platform, backend, headed, tmp_path, monkeypatch):
+    env = web_functions()
+    process = SimpleNamespace(poll=lambda: None)
+    popen = Mock(return_value=process)
+    monkeypatch.setattr(subprocess, 'Popen', popen)
+    env.update(LOGIN_RUNNERS={platform: {'backend': backend, 'wp': platform}},
+               LOGIN_PROCESSES={}, LOGIN_DIR=tmp_path, SHARED_SCRIPTS=SCRIPTS,
+               PROJECT_ROOT=ROOT, LOGIN_TIMEOUT=240, _WHOAMI_LOCK=threading.Lock(),
+               _WHOAMI_CACHE={}, _proxy_env=lambda: {},
+               _login_status=lambda platform: {'state': 'starting', 'qr': ''},
+               sys=SimpleNamespace(platform=runtime, executable=sys.executable))
+    result = asyncio.run(env['api_login_start'](platform))
+    command = popen.call_args.args[0]
+    assert ('--headed' in command) is headed
+    assert command[command.index('--qr-out') + 1] == str(tmp_path / f'{platform}.png')
+    assert command[command.index('--status-file') + 1] == str(tmp_path / f'{platform}.json')
+    assert '--profile-base' not in command
+    assert env['LOGIN_PROCESSES'][platform] is process
+    assert result == {'mode': 'qr', 'state': 'starting', 'qr': ''}
