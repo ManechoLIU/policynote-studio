@@ -23,6 +23,7 @@ def module():
 def adapter(monkeypatch):
     m = module()
     monkeypatch.setattr(m, '_CACHE', {})
+    monkeypatch.setattr(m, '_NOTE_CONTEXTS', {})
     monkeypatch.setattr(m, '_STOP_ERROR', None)
     monkeypatch.setattr(m, '_resolve_cli', lambda: '/offline/xhs')
     return m
@@ -66,6 +67,37 @@ def test_search_preserves_unknowns_and_never_claims_full_text(adapter, monkeypat
     assert 'PRIVATE_TOKEN' not in json.dumps(result)
 
 
+def test_search_accepts_original_cli_title_field_without_display_title(adapter, monkeypatch):
+    payload = search_payload()
+    card = payload['items'][0]['note_card']
+    card['title'] = card.pop('display_title')
+    fake_cli(monkeypatch, adapter, payload)
+    result = adapter.search_notes('家庭保险')
+    assert result['error'] is None
+    assert result['items'][0]['title'] == '保险知识'
+    assert result['items'][0]['body'] is None
+
+
+def test_untitled_image_note_does_not_break_other_search_results(adapter, monkeypatch):
+    payload = search_payload()
+    payload['items'][0]['note_card'].pop('display_title')
+    fake_cli(monkeypatch, adapter, payload)
+    result = adapter.search_notes('家庭保险')
+    assert result['error'] is None
+    assert result['items'][0]['title'] == '无标题笔记'
+    assert result['items'][0]['images']
+    assert result['items'][0]['body'] is None
+
+
+def test_official_cdn_http_image_is_upgraded_to_https(adapter, monkeypatch):
+    payload = search_payload()
+    payload['items'][0]['note_card']['cover']['url_default'] = 'http://sns-webpic-qc.xhscdn.com/cover.jpg'
+    fake_cli(monkeypatch, adapter, payload)
+    result = adapter.search_notes('家庭保险')
+    assert result['error'] is None
+    assert result['items'][0]['images'] == ['https://sns-webpic-qc.xhscdn.com/cover.jpg']
+
+
 @pytest.mark.parametrize('query', ['', ' ', '--private', '\x00x', 'a'*101, None])
 def test_invalid_keyword_does_not_start_cli(adapter, monkeypatch, query):
     monkeypatch.setattr(adapter, '_run_cli', lambda *a: pytest.fail('invalid input must not execute'))
@@ -106,7 +138,8 @@ def test_only_nonempty_detail_desc_is_full(adapter, monkeypatch, desc, status):
     item = result['items'][0]
     assert item['content_status'] == status
     assert item['body'] == ('正文内容' if status == 'full' else None)
-    assert item['images'] == ['https://sns-img-qc.xhscdn.com/full.jpg']
+    assert item['images'] == ['https://sns-img-qc.xhscdn.com/full.jpg',
+                              'https://sns-img-qc.xhscdn.com/plain.jpg']
     assert item['published_at'] == '2025-11-04T05:00:00+00:00'
     assert 'PRIVATE' not in json.dumps(result)
 
@@ -192,6 +225,7 @@ def offline_executable(tmp_path, body):
 
 
 @pytest.mark.parametrize('code,want', [('not_authenticated', 'auth_required'),
+    ('profile_busy', 'busy'), ('read_timeout', 'timeout'),
     ('verification_required', 'risk_control'), ('ip_blocked', 'risk_control'),
     ('signature_error', 'risk_control'), ('api_error', 'rate_limited'), ('unknown_error', 'cli_failed')])
 def test_cli_error_envelopes_are_sanitized(tmp_path, code, want):
@@ -266,6 +300,35 @@ def test_expired_deadline_never_spawns(monkeypatch):
     with pytest.raises(m._CliError) as exc:
         m._run_cli('/offline/xhs', ['status', '--json'], time.monotonic()-1)
     assert exc.value.code == 'timeout'
+
+
+def test_bundled_reader_receives_remaining_budget_without_mutating_parent(monkeypatch, tmp_path):
+    m = module()
+    cli = offline_executable(tmp_path,
+        "import os,json\nprint(json.dumps({'data':{'remaining_ms':os.environ.get('EASEL_XHS_READ_BUDGET_MS')}}))\n")
+    monkeypatch.setattr(m, '_BUNDLED_SHIM', Path(cli))
+    monkeypatch.setenv('EASEL_XHS_READ_BUDGET_MS', '999999')
+    result = m._run_cli(cli, ['status', '--json'], time.monotonic()+5)
+    assert 0 < int(result['remaining_ms']) <= 4000
+    import os
+    assert os.environ['EASEL_XHS_READ_BUDGET_MS'] == '999999'
+
+
+def test_custom_reader_keeps_existing_environment_contract(monkeypatch, tmp_path):
+    m = module()
+    cli = offline_executable(tmp_path,
+        "import os,json\nprint(json.dumps({'data':{'remaining_ms':os.environ.get('EASEL_XHS_READ_BUDGET_MS')}}))\n")
+    monkeypatch.delenv('EASEL_XHS_READ_BUDGET_MS', raising=False)
+    assert m._run_cli(cli, ['status', '--json'], time.monotonic()+5) == {'remaining_ms': None}
+
+
+def test_bundled_reader_uses_server_python_not_ambient_shebang(monkeypatch, tmp_path):
+    m = module()
+    cli = tmp_path/'bundled-reader'
+    cli.write_text('#!/does/not/exist/python\nimport json,sys\nprint(json.dumps({"data":{"python":sys.executable}}))\n')
+    cli.chmod(0o700)
+    monkeypatch.setattr(m, '_BUNDLED_SHIM', cli)
+    assert m._run_cli(str(cli), ['status', '--json'], time.monotonic()+5) == {'python': sys.executable}
 
 
 def test_runner_success_and_sanitized_stderr(tmp_path):
@@ -423,3 +486,250 @@ def test_unexpected_stage_error_logs_generic_code_only(adapter, monkeypatch, cap
     raw = capsys.readouterr().err
     assert json.loads(raw)['error_code'] == 'cli_failed'
     assert 'SECRET' not in raw and '/private/' not in raw
+
+
+def test_default_resolver_uses_bundled_shim_without_external_cli(monkeypatch):
+    m=module()
+    monkeypatch.delenv('EASEL_XHS_CLI',raising=False)
+    resolved=m._resolve_cli()
+    assert resolved==str(Path(__file__).resolve().parents[1]/'skills/shared/scripts/redbook_read.py')
+
+
+def test_explicit_override_keeps_external_cli_route(monkeypatch,tmp_path):
+    m=module()
+    cli=Path(offline_executable(tmp_path,'pass\n'))
+    monkeypatch.setenv('EASEL_XHS_CLI',str(cli))
+    assert m._resolve_cli()==str(cli)
+
+
+def test_missing_bundled_entry_is_configuration_error_not_external_fallback(monkeypatch,tmp_path):
+    m=module()
+    monkeypatch.delenv('EASEL_XHS_CLI',raising=False)
+    monkeypatch.setattr(m,'_REDBOOK_ENTRY',tmp_path/'missing-dist.js')
+    with pytest.raises(m._CliError) as exc:m._resolve_cli()
+    assert exc.value.code=='cli_not_configured'
+
+
+def test_missing_node_is_configuration_error_without_external_fallback(monkeypatch):
+    m=module()
+    monkeypatch.delenv('EASEL_XHS_CLI',raising=False)
+    monkeypatch.setattr(m.shutil,'which',lambda name:None)
+    with pytest.raises(m._CliError) as exc:m._resolve_cli()
+    assert exc.value.code=='cli_not_configured'
+
+
+def test_empty_explicit_override_does_not_silently_use_bundled_reader(monkeypatch):
+    m=module()
+    monkeypatch.setenv('EASEL_XHS_CLI','')
+    with pytest.raises(m._CliError) as exc:m._resolve_cli()
+    assert exc.value.code=='cli_not_configured'
+
+
+def test_bundled_search_locator_reaches_read_only_inside_scoped_context(adapter,monkeypatch,capsys):
+    m=adapter
+    monkeypatch.setattr(m,'_resolve_cli',lambda:str(m._BUNDLED_SHIM))
+    account={'id':'account-a'}
+    seen=[]
+    def run(executable,args,deadline):
+        if args[0]=='status':return {'authenticated':True,'user':account}
+        if args[0]=='search':return search_payload()
+        locator=m._READ_CONTEXT.get()
+        seen.append(locator)
+        if not locator or locator['token']!='PRIVATE_TOKEN':raise m._CliError('cli_failed')
+        return {'note_id':NOTE_ID,'title':'保险知识','desc':'实际详情正文'}
+    monkeypatch.setattr(m,'_run_cli',run)
+    result=m.search_notes('保险')
+    assert 'PRIVATE_TOKEN' not in json.dumps(result)
+    read=m.read_note(URL+'?xsec_token=UNTRUSTED_USER_TOKEN')
+    assert read['error'] is None and read['items'][0]['content_status']=='full'
+    assert seen==[{'note_id':NOTE_ID,'token':'PRIVATE_TOKEN','source':'pc_search','account_id':'account-a'}]
+    assert m._READ_CONTEXT.get() is None
+    assert 'PRIVATE_TOKEN' not in json.dumps(read)+capsys.readouterr().err
+
+
+def test_locator_is_account_scoped_expires_and_never_applies_to_custom_cli(adapter,monkeypatch):
+    m=adapter
+    monkeypatch.setattr(m,'_resolve_cli',lambda:str(m._BUNDLED_SHIM))
+    clock={'now':100.0};account={'id':'account-a'};seen=[]
+    monkeypatch.setattr(m.time,'monotonic',lambda:clock['now'])
+    def run(executable,args,deadline):
+        if args[0]=='status':return {'authenticated':True,'user':account}
+        if args[0]=='search':return search_payload()
+        seen.append(m._READ_CONTEXT.get())
+        raise m._CliError('cli_failed')
+    monkeypatch.setattr(m,'_run_cli',run)
+    m.search_notes('保险')
+    account['id']='account-b';m.read_note(URL)
+    assert seen[-1] is None
+    account['id']='account-a';clock['now']=100+m._NOTE_CONTEXT_SECONDS+1;m.read_note(URL)
+    assert seen[-1] is None
+    clock['now']=2000;m.search_notes('保险')
+    monkeypatch.setattr(m,'_resolve_cli',lambda:'/offline/custom-xhs')
+    m.read_note(URL)
+    assert seen[-1] is None
+
+
+def test_authentication_failure_clears_private_note_locators(adapter,monkeypatch):
+    m=adapter
+    monkeypatch.setattr(m,'_resolve_cli',lambda:str(m._BUNDLED_SHIM))
+    calls=fake_cli(monkeypatch,m,search_payload())
+    m.search_notes('保险')
+    assert m._NOTE_CONTEXTS
+    fake_cli(monkeypatch,m,{}, {'authenticated':False})
+    assert m.read_note(URL)['error']['code']=='auth_required'
+    assert m._NOTE_CONTEXTS=={}
+
+
+def test_private_locator_cache_has_capacity_and_requires_account(adapter,monkeypatch):
+    m=adapter
+    monkeypatch.setattr(m,'_NOTE_CONTEXT_MAX',1)
+    cli=str(m._BUNDLED_SHIM)
+    raw=search_payload()
+    items=m._parse_items(raw,'search',None)
+    m._remember_note_contexts(cli,None,raw,items)
+    assert m._NOTE_CONTEXTS=={}
+    m._remember_note_contexts(cli,'account-a',raw,items)
+    other='a'*24
+    raw2={'items':[{'id':other,'model_type':'note','xsec_token':'OTHER_TOKEN','note_card':{'display_title':'另一篇'}}]}
+    m._remember_note_contexts(cli,'account-a',raw2,m._parse_items(raw2,'search',None))
+    assert len(m._NOTE_CONTEXTS)==1
+    assert m._read_locator(cli,'account-a',NOTE_ID) is None
+    assert m._read_locator(cli,'account-a',other)['token']=='OTHER_TOKEN'
+
+
+def test_bundled_locator_is_environment_only_and_inherited_override_is_removed(monkeypatch,tmp_path):
+    m=module()
+    import os
+    f=tmp_path/'safe-bundle.py'
+    f.write_text('import json,os,sys\n'
+                 +'ctx=os.environ.get("EASEL_XHS_NOTE_CONTEXT")\n'
+                 +'print(json.dumps({"data":{"has_context":bool(ctx),"secret_in_argv":any("PRIVATE" in a for a in sys.argv)}}))\n')
+    f.chmod(0o700)
+    monkeypatch.setattr(m,'_BUNDLED_SHIM',f)
+    monkeypatch.setenv('EASEL_XHS_NOTE_CONTEXT','PARENT_UNTRUSTED')
+    token=m._READ_CONTEXT.set({'note_id':NOTE_ID,'token':'PRIVATE_TOKEN','source':'pc_search'})
+    try:
+        result=m._run_cli(str(f),['read',URL,'--json'],m.time.monotonic()+5)
+        assert result=={'has_context':True,'secret_in_argv':False}
+        status=m._run_cli(str(f),['status','--json'],m.time.monotonic()+5)
+        assert status=={'has_context':False,'secret_in_argv':False}
+    finally:m._READ_CONTEXT.reset(token)
+    assert os.environ['EASEL_XHS_NOTE_CONTEXT']=='PARENT_UNTRUSTED'
+
+
+def test_locator_can_be_recovered_from_official_search_web_url_without_public_leak(adapter):
+    m=adapter
+    raw={'items':[{'id':NOTE_ID,'model_type':'note','webUrl':URL+'?xsec_token=WEB_ONLY_TOKEN&xsec_source=pc_search',
+                   'note_card':{'display_title':'标题'}}]}
+    public=m._parse_items(raw,'search',None)
+    m._remember_note_contexts(str(m._BUNDLED_SHIM),'account-a',raw,public)
+    assert m._read_locator(str(m._BUNDLED_SHIM),'account-a',NOTE_ID)['token']=='WEB_ONLY_TOKEN'
+    assert 'WEB_ONLY_TOKEN' not in json.dumps(public)
+
+
+def test_conflicting_search_locator_fields_are_not_trusted(adapter):
+    m=adapter
+    raw=search_payload()
+    raw['items'][0]['webUrl']=URL+'?xsec_token=CONFLICT'
+    m._remember_note_contexts(str(m._BUNDLED_SHIM),'account-a',raw,m._parse_items(raw,'search',None))
+    assert m._read_locator(str(m._BUNDLED_SHIM),'account-a',NOTE_ID) is None
+
+
+def test_search_expected_account_is_scoped_and_failed_search_cannot_cache(adapter,monkeypatch):
+    m=adapter
+    monkeypatch.setattr(m,'_resolve_cli',lambda:str(m._BUNDLED_SHIM))
+    def run(executable,args,deadline):
+        if args[0]=='status':return {'authenticated':True,'user':{'id':'account-a'}}
+        assert m._EXPECTED_ACCOUNT.get()=='account-a'
+        raise m._CliError('auth_required')
+    monkeypatch.setattr(m,'_run_cli',run)
+    result=m.search_notes('保险')
+    assert result['error']['code']=='auth_required'
+    assert m._CACHE=={} and m._NOTE_CONTEXTS=={}
+    assert m._EXPECTED_ACCOUNT.get() is None
+
+
+def test_note_locator_outlives_search_cache_but_expires_at_its_own_bound(adapter,monkeypatch):
+    m=adapter
+    clock={'now':100.0}
+    monkeypatch.setattr(m.time,'monotonic',lambda:clock['now'])
+    raw=search_payload();cli=str(m._BUNDLED_SHIM)
+    m._remember_note_contexts(cli,'account-a',raw,m._parse_items(raw,'search',None))
+    clock['now']=100+m._CACHE_SECONDS+1
+    assert m._read_locator(cli,'account-a',NOTE_ID) is not None
+    clock['now']=100+m._NOTE_CONTEXT_SECONDS+1
+    assert m._read_locator(cli,'account-a',NOTE_ID) is None
+
+
+def test_expected_search_account_is_only_derived_for_bundled_search(monkeypatch,tmp_path):
+    m=module()
+    import os
+    f=tmp_path/'expected-account-bundle.py'
+    f.write_text('import json,os\nprint(json.dumps({"data":{'
+        +'"expected":os.environ.get("EASEL_XHS_EXPECTED_ACCOUNT"),'
+        +'"inherited_keyword":os.environ.get("EASEL_XHS_SEARCH_KEYWORD")}}))\n')
+    monkeypatch.setattr(m,'_BUNDLED_SHIM',f)
+    monkeypatch.setenv('EASEL_XHS_EXPECTED_ACCOUNT','PARENT_UNTRUSTED')
+    monkeypatch.setenv('EASEL_XHS_SEARCH_KEYWORD','PARENT_QUERY')
+    token=m._EXPECTED_ACCOUNT.set('1234567890abcdef12345678')
+    try:
+        search=m._run_cli(str(f),['search','保险','--json'],m.time.monotonic()+5)
+        status=m._run_cli(str(f),['status','--json'],m.time.monotonic()+5)
+    finally:m._EXPECTED_ACCOUNT.reset(token)
+    assert search=={'expected':'1234567890abcdef12345678','inherited_keyword':None}
+    assert status=={'expected':None,'inherited_keyword':None}
+    assert os.environ['EASEL_XHS_EXPECTED_ACCOUNT']=='PARENT_UNTRUSTED'
+    assert os.environ['EASEL_XHS_SEARCH_KEYWORD']=='PARENT_QUERY'
+
+
+def test_original_url_uses_fresh_current_account_locator_and_encoded_official_target(adapter,monkeypatch):
+    from urllib.parse import parse_qs,urlsplit
+    m=adapter
+    cli=str(m._BUNDLED_SHIM)
+    monkeypatch.setattr(m,'_resolve_cli',lambda:cli)
+    raw=search_payload();raw['items'][0]['xsec_token']='NOTE+/='
+    m._remember_note_contexts(cli,'account-a',raw,m._parse_items(raw,'search',None))
+    calls=[]
+    def run(executable,args,deadline):
+        calls.append(args)
+        return {'authenticated':True,'user':{'id':'account-a'}}
+    monkeypatch.setattr(m,'_run_cli',run)
+    result=m.original_note_url(URL)
+    parsed=urlsplit(result)
+    assert parsed.scheme=='https' and parsed.netloc=='www.xiaohongshu.com'
+    assert parsed.path=='/explore/'+NOTE_ID
+    assert parse_qs(parsed.query)=={'xsec_token':['NOTE+/='],'xsec_source':['pc_search']}
+    assert '%2B%2F%3D' in result and 'web_session' not in result and 'a1=' not in result
+    assert calls==[['status','--json']]
+
+
+def test_original_url_rejects_missing_expired_or_other_account_context(adapter,monkeypatch):
+    m=adapter;cli=str(m._BUNDLED_SHIM)
+    monkeypatch.setattr(m,'_resolve_cli',lambda:cli)
+    clock={'now':100.0};account={'id':'account-a'}
+    monkeypatch.setattr(m.time,'monotonic',lambda:clock['now'])
+    monkeypatch.setattr(m,'_run_cli',lambda *a:{'authenticated':True,'user':account})
+    with pytest.raises(m._CliError) as exc:m.original_note_url(URL)
+    assert exc.value.code=='original_unavailable'
+    raw=search_payload();m._remember_note_contexts(cli,'account-a',raw,m._parse_items(raw,'search',None))
+    account['id']='account-b'
+    with pytest.raises(m._CliError) as exc:m.original_note_url(URL)
+    assert exc.value.code=='original_unavailable'
+    account['id']='account-a';clock['now']=100+m._NOTE_CONTEXT_SECONDS+1
+    with pytest.raises(m._CliError) as exc:m.original_note_url(URL)
+    assert exc.value.code=='original_unavailable'
+
+
+@pytest.mark.parametrize('url',[URL+'?xsec_token=USER',URL+'#fragment',URL+'/',
+    URL.replace('www.xiaohongshu.com','evil.example'),URL.replace('/explore/','/discovery/item/')])
+def test_original_only_accepts_exact_public_canonical_url(adapter,monkeypatch,url):
+    monkeypatch.setattr(adapter,'_run_cli',lambda *a:pytest.fail('invalid original URL must not execute'))
+    with pytest.raises(adapter._CliError) as exc:adapter.original_note_url(url)
+    assert exc.value.code=='invalid_url'
+
+
+def test_custom_cli_original_context_is_explicitly_unsupported(adapter,monkeypatch):
+    monkeypatch.setattr(adapter,'_resolve_cli',lambda:'/offline/custom')
+    monkeypatch.setattr(adapter,'_run_cli',lambda *a:pytest.fail('unsupported reader must not execute'))
+    with pytest.raises(adapter._CliError) as exc:adapter.original_note_url(URL)
+    assert exc.value.code=='original_unsupported'

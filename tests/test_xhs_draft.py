@@ -118,6 +118,154 @@ class Page:
         pass
 
 
+class UploadStatePage:
+    def __init__(self, snapshots):
+        self.snapshots = iter(snapshots)
+        self.current = []
+        self.clock, self.inputs, self.waits, self.reads = 0, [], [], 0
+
+    def set_input_files(self, selector, path):
+        self.inputs.append(path)
+
+    def query_selector_all(self, selector):
+        # The old waiter sees a local preview even when its upload is failed.
+        return [Element('上传失败')] * len(self.inputs)
+
+    def evaluate(self, expression):
+        self.reads += 1
+        self.current = next(self.snapshots, self.current)
+        return self.current
+
+    def wait_for_timeout(self, milliseconds):
+        self.waits.append(milliseconds)
+        self.clock += milliseconds / 1000
+
+
+def upload_slot(**changes):
+    state = dict(visible=True, loaded=True, ready=True, pending=False, failed=False, retry=False)
+    state.update(changes)
+    return state
+
+
+def mock_upload_clock(page, monkeypatch):
+    monkeypatch.setattr(xhs, 'time', SimpleNamespace(monotonic=lambda: page.clock, time=lambda: page.clock))
+
+
+def test_image_upload_waits_for_pending_slot_to_become_ready(monkeypatch):
+    pending = upload_slot()
+    pending.update(pending=True, ready=False)
+    page = UploadStatePage([[pending], [upload_slot()]])
+    mock_upload_clock(page, monkeypatch)
+    xhs._upload_images(page, ['fixture.jpg'])
+    assert page.reads == 2 and page.waits == [500]
+    assert page.inputs == ['fixture.jpg']
+
+
+def test_image_upload_ready_read_after_deadline_is_not_accepted(monkeypatch, capsys):
+    page = UploadStatePage([[upload_slot()]])
+    mock_upload_clock(page, monkeypatch)
+    original_evaluate = page.evaluate
+    def late_evaluate(expression):
+        page.clock = 61
+        return original_evaluate(expression)
+    page.evaluate = late_evaluate
+    with pytest.raises(SystemExit):
+        xhs._upload_images(page, ['fixture.jpg'])
+    assert page.inputs == ['fixture.jpg'] and page.reads == 1
+    assert 'XHS_IMAGE_UPLOAD_UNCONFIRMED' in capsys.readouterr().err
+
+
+@pytest.mark.parametrize('bad_state', [
+    {'failed': True}, {'retry': True}, {'pending': True}, {'ready': False},
+    {'loaded': False}, {'visible': False},
+])
+def test_image_upload_local_preview_cannot_override_failed_or_unready_slot(bad_state, monkeypatch, capsys):
+    state = upload_slot()
+    state.update(bad_state)
+    page = UploadStatePage([[state]])
+    mock_upload_clock(page, monkeypatch)
+    with pytest.raises(SystemExit):
+        xhs._upload_images(page, ['fixture.jpg'])
+    assert page.inputs == ['fixture.jpg']
+    if state['failed'] or state['retry']:
+        assert page.waits == []
+        assert 'XHS_IMAGE_UPLOAD_FAILED' in capsys.readouterr().err
+
+
+def test_image_upload_requires_every_image_ready_and_rechecks_prior_slots(monkeypatch):
+    pending = upload_slot()
+    pending.update(pending=True, ready=False)
+    page = UploadStatePage([[upload_slot()], [upload_slot(), pending], [upload_slot(), upload_slot()]])
+    mock_upload_clock(page, monkeypatch)
+    xhs._upload_images(page, ['one.jpg', 'two.jpg'])
+    assert page.inputs == ['one.jpg', 'two.jpg']
+    assert page.reads == 3 and page.waits == [500]
+
+
+def test_image_upload_prior_image_failure_stops_before_next_upload(monkeypatch):
+    failed = upload_slot()
+    failed['failed'] = True
+    page = UploadStatePage([[upload_slot()], [failed, upload_slot()]])
+    mock_upload_clock(page, monkeypatch)
+    with pytest.raises(SystemExit):
+        xhs._upload_images(page, ['one.jpg', 'two.jpg', 'three.jpg'])
+    assert page.inputs == ['one.jpg', 'two.jpg']
+
+
+def test_image_upload_failure_prevents_editor_fill_and_save(tmp_path, monkeypatch, capsys):
+    from tests.test_xhs_auth_diagnostics import playwright_double
+    forbid_public(monkeypatch)
+    page = Page()
+    page.evaluate = lambda *args: [upload_slot(failed=True)]
+    playwright_double(monkeypatch, SimpleNamespace(pages=[page], close=lambda: None))
+    monkeypatch.setattr(xhs.content_guard, 'guard_or_die', lambda *a, **kw: None)
+    monkeypatch.setattr(xhs, '_click_publish_tab', lambda *a: None)
+    monkeypatch.setattr(xhs, '_fill_and_save_draft', lambda *a, **kw: pytest.fail('upload failure reached save'))
+    media = tmp_path / 'image.jpg'
+    media.write_bytes(b'fixture')
+    args = SimpleNamespace(title='标题', content='secret-body', tags='', images=str(media), exec=True,
+                           profile_base=None, proxy=None, no_proxy=True, headed=False, keep_open=False)
+    with pytest.raises(SystemExit):
+        xhs._publish(args, 'image')
+    captured = capsys.readouterr()
+    diagnostic = json.loads(captured.out.splitlines()[-1])['failureDiagnostic']
+    assert diagnostic['stage'] == 'upload' and diagnostic['action_sent'] is False
+    assert diagnostic['published'] is False and not page.clicked
+    assert 'secret-body' not in captured.out + captured.err
+    assert 'XHS_IMAGE_UPLOAD_FAILED' in captured.err
+
+
+def test_image_upload_actual_dom_state_function_guards():
+    import subprocess
+    script = r'''
+const assert = require('node:assert/strict');
+const inspect = FUNCTION;
+const node = (values={}) => ({isConnected:true, getClientRects(){return this.hidden ? [] : [1]},
+    getAttribute(){return null}, ...values});
+global.getComputedStyle = el => ({visibility:el.hidden ? 'hidden' : 'visible', display:'block'});
+function snapshot(options={}) {
+    const image = node({complete:true,naturalWidth:640,naturalHeight:480,...options.image});
+    const control = node({disabled:false,...options.control});
+    const slot = node({innerText:options.text || '', querySelector:s=> options.pending ? {} : null,
+        querySelectorAll:s=>s==='img.img.preview' ? [image] : options.noControl ? [] : [control]});
+    global.document = {querySelectorAll:s=>{assert.equal(s,'.img-preview-area .pr');return [slot]}};
+    return inspect()[0];
+}
+assert.deepEqual(snapshot(),{visible:true,loaded:true,ready:true,pending:false,failed:false,retry:false});
+assert.equal(snapshot({pending:true}).pending,true);
+assert.equal(snapshot({noControl:true}).ready,false);
+assert.equal(snapshot({control:{hidden:true}}).ready,false);
+assert.equal(snapshot({control:{disabled:true}}).ready,false);
+assert.equal(snapshot({image:{complete:false}}).loaded,false);
+assert.equal(snapshot({image:{naturalWidth:0}}).loaded,false);
+assert.equal(snapshot({image:{naturalHeight:0}}).loaded,false);
+assert.equal(snapshot({text:'上传失败'}).failed,true);
+assert.equal(snapshot({text:'重试'}).retry,true);
+'''.replace('FUNCTION', xhs._IMAGE_UPLOAD_STATES)
+    result = subprocess.run(['node', '-e', script], capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+
+
 class DraftDialogPage(Page):
     def __init__(self, prompt='是否保存草稿并离开？', confirm_labels=('离开',), receipt=True,
                  disabled=False, click_error=False, preexisting_dialog=False):
@@ -205,6 +353,187 @@ def test_preexisting_confirmation_blocks_initial_draft_action(monkeypatch):
         xhs._save_draft(page, timeout_s=0)
     assert page.buttons[0].clicks == 0
     assert all(button.clicks == 0 for button in page.confirm_buttons)
+
+
+class PictureGuidePage(Page):
+    def __init__(self, *, title='图片可以编辑啦，快来试试吧', labels=('我知道了', ''),
+                 description='支持裁剪图片大小、选择模版或滤镜、添加贴纸和文字', close_aria='关闭新功能引导',
+                 ack_class='feature-guide__btn', close_class='feature-guide__close',
+                 classes='feature-guide feature-guide--with-arrow', guides=1,
+                 enabled=True, hides=True, live=True, extra_dialog=False):
+        super().__init__()
+        self.guide_hidden = False
+        class GuideControl(Element):
+            def get_attribute(self, key):
+                if key == 'class':
+                    return ack_class if self.text == '我知道了' else close_class
+                if key == 'aria-label' and self.text == '':
+                    return close_aria
+                return None
+        self.guide_buttons = [GuideControl(label, enabled=enabled) for label in labels]
+        page = self
+        for button in self.guide_buttons:
+            def click(*, timeout, target=button):
+                target.clicks += 1
+                page.guide_hidden = hides
+            button.click = click
+
+        class Guide(Element):
+            def get_attribute(self, key):
+                return {'class': classes, 'role': 'dialog'}.get(key)
+
+            def inner_text(self):
+                return title + '\n' + description.replace('和文字', '\n和文字') + '\n' + ' '.join(labels)
+
+            def query_selector_all(self, selector):
+                assert selector == 'button,[role="button"]'
+                return page.guide_buttons
+
+            def evaluate(self, expression, other=None):
+                if expression == '(node, previous) => node === previous':
+                    return self is other
+                assert 'ownerDocument === document' in expression
+                return live
+
+            def wait_for_element_state(self, state, *, timeout):
+                assert state == 'hidden' and timeout == 5000
+                if not page.guide_hidden:
+                    raise RuntimeError('guide did not close')
+
+        self.guide = Guide('')
+        self.guides = [self.guide] * guides
+        if extra_dialog:
+            self.guides.append(Element('unrelated dialog'))
+
+    def locator(self, selector):
+        if selector == xhs._DRAFT_DIALOGS:
+            return Locator([] if self.guide_hidden else self.guides)
+        return super().locator(selector)
+
+
+def test_exact_picture_guide_is_dismissed_once_before_strict_draft_receipt(monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage()
+    xhs._save_draft(page, timeout_s=0)
+    assert page.guide_buttons[0].clicks == 1
+    assert page.guide_buttons[1].clicks == 0
+    assert page.guide_hidden
+    assert page.buttons[0].clicks == 1
+
+
+@pytest.mark.parametrize('options', [
+    {'title': '图片可以编辑啦，快来试试吧，发布吧'},
+    {'description': '不同的引导说明'},
+    {'description': ''},
+    {'labels': ('知道了',)},
+    {'labels': ('我知道了', '发布')},
+    {'labels': ('我知道了', '我知道了')},
+    {'labels': ('我知道了', '', '')},
+    {'close_aria': '发布'},
+    {'close_class': 'other-close'},
+    {'ack_class': 'other-action'},
+    {'classes': 'feature-guide'},
+    {'guides': 2},
+    {'enabled': False},
+    {'live': False},
+    {'extra_dialog': True},
+])
+def test_untrusted_picture_guide_keeps_original_baseline_veto(options, monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage(**options)
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert all(button.clicks == 0 for button in page.guide_buttons)
+    assert page.buttons[0].clicks == 0
+
+
+def test_picture_guide_must_hide_before_any_draft_action(monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage(hides=False)
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert page.guide_buttons[0].clicks == 1
+    assert page.buttons[0].clicks == 0
+
+
+def test_picture_guide_dismissal_is_not_a_save_receipt(monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage()
+    page.success = ''
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert page.guide_buttons[0].clicks == 1
+    assert page.buttons[0].clicks == 1
+
+
+@pytest.mark.parametrize('url', [
+    'https://www.xiaohongshu.com/publish/publish',
+    'http://creator.xiaohongshu.com/publish/publish',
+    'https://creator.xiaohongshu.com/other',
+])
+def test_picture_guide_requires_official_publish_scope(url, monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage()
+    page.url = url
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert page.guide_buttons[0].clicks == page.buttons[0].clicks == 0
+
+
+@pytest.mark.parametrize('change', ['dialog', 'button'])
+def test_picture_guide_changed_identity_is_not_clicked(change, monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage()
+    if change == 'dialog':
+        dialogs = iter([[page.guide], [Element('replacement')]])
+        monkeypatch.setattr(xhs, '_visible_draft_dialogs', lambda page: next(dialogs))
+    else:
+        page.guide_buttons[0].evaluate = lambda *args: False
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert page.guide_buttons[0].clicks == page.buttons[0].clicks == 0
+
+
+def test_picture_guide_click_error_is_never_retried(monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage()
+    def fail_click(**kwargs):
+        page.guide_buttons[0].clicks += 1
+        raise RuntimeError('uncertain guide dismissal')
+    page.guide_buttons[0].click = fail_click
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert page.guide_buttons[0].clicks == 1
+    assert page.buttons[0].clicks == 0
+
+
+@pytest.mark.parametrize('close_aria', [None, '关闭', '关闭新功能引导'])
+def test_picture_guide_ignores_only_known_icon_close_control(close_aria, monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage(close_aria=close_aria)
+    xhs._save_draft(page, timeout_s=0)
+    assert [button.clicks for button in page.guide_buttons] == [1, 0]
+    assert page.buttons[0].clicks == 1
+
+
+def test_picture_guide_conflicting_close_labels_are_not_treated_as_empty(monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage()
+    close = page.guide_buttons[1]
+    close.text = '发布'
+    close.get_attribute = lambda key: {'aria-label': '关闭', 'class': 'feature-guide__close'}.get(key)
+    with pytest.raises(SystemExit):
+        xhs._save_draft(page, timeout_s=0)
+    assert all(button.clicks == 0 for button in page.guide_buttons)
+    assert page.buttons[0].clicks == 0
+
+
+def test_picture_guide_real_close_aria_and_ack_classes(monkeypatch):
+    forbid_public(monkeypatch)
+    page = PictureGuidePage(labels=('', '我知道了'))
+    xhs._save_draft(page, timeout_s=0)
+    assert [button.clicks for button in page.guide_buttons] == [0, 1]
+    assert page.buttons[0].clicks == 1
 
 
 def forbid_public(monkeypatch):

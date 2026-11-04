@@ -32,7 +32,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, Field, StrictBool
 from sse_starlette.sse import EventSourceResponse
 
@@ -510,14 +510,14 @@ def _same_loopback_origin(request: Request, origin: str) -> bool:
 
 app.add_middleware(CORSMiddleware, allow_origins=_LOCAL_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=['localhost', '127.0.0.1'] + _EXTRA_HOSTS)
-_XHS_ACCOUNT_READ_PATHS = {'/api/xhs/notes/search', '/api/xhs/notes/detail'}
+_XHS_ACCOUNT_READ_PATHS = {'/api/xhs/notes/search', '/api/xhs/notes/detail', '/api/xhs/notes/original'}
 
 
 @app.middleware('http')
 async def local_write_guard(request: Request, call_next):
     """拦住「别的网站让浏览器替我改本机状态」的写请求，同时不误伤本机调用。
 
-    两个小红书账号读取GET也复用此边界，且禁止跨站子资源触发和浏览器缓存。
+    小红书账号读取GET也复用此边界，且禁止跨站子资源触发和浏览器缓存。
 
     两条判据，按请求实际形态二选一：
     ① 带 Origin：必须在 _LOCAL_ORIGINS 里，或为回环客户端访问的同源工作台。
@@ -5674,6 +5674,47 @@ async def api_xhs_notes_detail(request: Request):
     except Exception:
         raise HTTPException(502, '小红书笔记读取暂时不可用。') from None
     return _xhs_notes_response(result)
+
+
+@app.get('/api/xhs/notes/original')
+async def api_xhs_notes_original(request: Request):
+    """Explicit original click: send only its note locator to the same official note."""
+    from easel.xhs_notes import _canonical_url, _CliError, original_note_url
+    values = request.query_params.getlist('url')
+    url = values[0] if len(values) == 1 and set(request.query_params) == {'url'} else ''
+    try:
+        canonical, _ = _canonical_url(url)
+        if canonical != url:
+            raise _CliError('invalid_url')
+    except _CliError:
+        raise HTTPException(400, '请使用列表中的小红书原文链接。') from None
+    try:
+        destination = await asyncio.to_thread(original_note_url, canonical)
+    except _CliError as error:
+        errors = {
+            'original_unavailable': (410, '原文访问上下文已失效或未找到，请重新搜索后再打开原文。'),
+            'original_unsupported': (409, '当前读取模块不支持原文跳转，请使用工作台默认数据源重新搜索。'),
+            'auth_required': (401, '小红书账号状态未确认，请在账号页确认后重新搜索。'),
+            'busy': (409, '已有小红书读取正在执行，请稍后再打开原文。'),
+            'timeout': (504, '小红书账号校验超时，请稍后重新搜索再打开原文。'),
+            'risk_control': (403, '小红书触发验证或风控，请处理后重新搜索。'),
+            'cli_not_configured': (503, '小红书读取模块未就绪。'),
+        }
+        status, message = errors.get(error.code, (502, '小红书原文暂时无法打开，请重新搜索后再试。'))
+        raise HTTPException(status, message) from None
+    except Exception:
+        raise HTTPException(502, '小红书原文暂时无法打开，请重新搜索后再试。') from None
+    try:
+        parsed = urllib.parse.urlsplit(destination)
+        query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+        if (_canonical_url(destination)[0] != canonical or parsed.netloc != 'www.xiaohongshu.com'
+                or parsed.fragment or set(query) != {'xsec_token', 'xsec_source'}
+                or query['xsec_source'] != ['pc_search'] or len(query['xsec_token']) != 1
+                or not re.fullmatch(r'[A-Za-z0-9._~+/=-]{1,4096}', query['xsec_token'][0])):
+            raise ValueError()
+    except Exception:
+        raise HTTPException(502, '小红书原文访问链接未确认，请重新搜索后再试。') from None
+    return RedirectResponse(destination, status_code=307, headers={'Referrer-Policy': 'no-referrer'})
 
 
 @app.get("/api/trends")

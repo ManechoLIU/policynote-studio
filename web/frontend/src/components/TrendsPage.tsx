@@ -464,7 +464,7 @@ function useXhsNotes(persona: string, insurancePersona: boolean, enabled: boolea
             <div className="xhs-note-metrics">{(['likes', 'saves', 'comments'] as const).map(key => note.metrics?.[key] != null
               && <span key={key}>{{ likes: '点赞', saves: '收藏', comments: '评论' }[key]} {note.metrics[key]}</span>)}</div>
             <div className="xhs-note-actions">
-              {url ? <a className="btn" href={url} target="_blank" rel="noreferrer">原文</a> : <button className="btn" disabled>原文不可用</button>}
+              {url ? <a className="btn" href={`/api/xhs/notes/original?url=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer">原文</a> : <button className="btn" disabled>原文不可用</button>}
               <button className="btn" disabled={searching || Boolean(busy) || !onReference} onClick={() => handleNoteAction(note, 'breakdown')}>一键拆解</button>
               <button className="btn btn-primary" disabled={searching || Boolean(busy) || !onReference} onClick={() => handleNoteAction(note, 'rewrite')}>按当前IP仿写</button>
               <button className="btn" disabled={savedIds.has(note.id)} onClick={() => saveNote(note)}>

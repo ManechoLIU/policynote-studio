@@ -211,3 +211,97 @@ def test_same_origin_browser_without_origin_can_read(monkeypatch):
     response = client(origin=None).get(SEARCH, params={'q': '保险'},
                                        headers={'Sec-Fetch-Site': 'same-origin'})
     assert response.status_code == 200
+
+
+ORIGINAL='/api/xhs/notes/original'
+
+
+def test_search_to_original_redirect_is_local_guarded_and_never_exports_session(monkeypatch):
+    from urllib.parse import parse_qs,urlsplit
+    m=xhs_notes
+    monkeypatch.setattr(m,'_CACHE',{})
+    monkeypatch.setattr(m,'_NOTE_CONTEXTS',{})
+    monkeypatch.setattr(m,'_STOP_ERROR',None)
+    monkeypatch.setattr(m,'_resolve_cli',lambda:str(m._BUNDLED_SHIM))
+    def run(executable,args,deadline):
+        if args[0]=='status':return {'authenticated':True,'user':{'id':'account-a'}}
+        assert args[0]=='search'
+        return {'items':[{'id':NOTE_ID,'model_type':'note','xsec_token':'NOTE+/=',
+            'note_card':{'display_title':'家庭保险'},'web_session':'PRIVATE_SESSION','a1':'PRIVATE_A1'}]}
+    monkeypatch.setattr(m,'_run_cli',run)
+    c=client()
+    search=c.get(SEARCH,params={'q':'家庭保险'})
+    assert search.status_code==200 and 'NOTE' not in search.text and 'PRIVATE' not in search.text
+    response=c.get(ORIGINAL,params={'url':URL},follow_redirects=False)
+    assert response.status_code==307
+    parsed=urlsplit(response.headers['location'])
+    assert parsed.netloc=='www.xiaohongshu.com' and parsed.path=='/explore/'+NOTE_ID
+    assert parse_qs(parsed.query)=={'xsec_token':['NOTE+/='],'xsec_source':['pc_search']}
+    assert 'PRIVATE' not in response.headers['location'] and 'web_session' not in response.headers['location']
+    assert response.text=='' and response.headers['cache-control']=='no-store'
+
+
+@pytest.mark.parametrize('params',[{}, {'url':URL+'?xsec_token=USER'},
+    [('url',URL),('url',URL)], {'url':URL,'other':'SECRET'}, {'url':'https://evil.example/x'}])
+def test_original_bad_input_is_safe_400_before_status(monkeypatch,params):
+    monkeypatch.setattr(xhs_notes,'original_note_url',lambda *a:pytest.fail('invalid input must not resolve'))
+    response=client().get(ORIGINAL,params=params,follow_redirects=False)
+    assert response.status_code==400 and 'location' not in response.headers
+    assert 'SECRET' not in response.text and 'USER' not in response.text
+
+
+@pytest.mark.parametrize('origin,fetch_site,peer',[
+    ('https://evil.example',None,('127.0.0.1',12345)),
+    (None,'same-site',('127.0.0.1',12345)),
+    (None,'cross-site',('127.0.0.1',12345)),
+    (None,None,('192.168.1.2',12345)),
+])
+def test_original_is_guarded_before_adapter(monkeypatch,origin,fetch_site,peer):
+    monkeypatch.setattr(xhs_notes,'original_note_url',lambda *a:pytest.fail('permission rejected before adapter'))
+    response=client(peer=peer,origin=origin).get(ORIGINAL,params={'url':URL},
+        headers={'Sec-Fetch-Site':fetch_site} if fetch_site else {},follow_redirects=False)
+    assert response.status_code==403 and 'location' not in response.headers
+
+
+@pytest.mark.parametrize('code,status',[('original_unavailable',410),('original_unsupported',409),
+                                      ('auth_required',401),('busy',409),('timeout',504)])
+def test_original_missing_or_invalid_context_is_not_a_bare_redirect(monkeypatch,code,status):
+    def fail(url):raise xhs_notes._CliError(code)
+    monkeypatch.setattr(xhs_notes,'original_note_url',fail)
+    response=client().get(ORIGINAL,params={'url':URL},follow_redirects=False)
+    assert response.status_code==status and 'location' not in response.headers
+    assert response.headers['cache-control']=='no-store'
+    if code=='original_unavailable':assert '重新搜索' in response.text
+
+
+def test_original_rejects_unexpected_redirect_host(monkeypatch):
+    monkeypatch.setattr(xhs_notes,'original_note_url',lambda url:'https://evil.example/'+NOTE_ID+'?xsec_token=SECRET')
+    response=client().get(ORIGINAL,params={'url':URL},follow_redirects=False)
+    assert response.status_code==502 and 'location' not in response.headers and 'SECRET' not in response.text
+
+
+def test_original_same_origin_navigation_without_origin_is_allowed(monkeypatch):
+    monkeypatch.setattr(xhs_notes,'original_note_url',lambda url:URL+'?xsec_token=NOTE&xsec_source=pc_search')
+    response=client(origin=None).get(ORIGINAL,params={'url':URL},
+        headers={'Sec-Fetch-Site':'same-origin','Sec-Fetch-Mode':'navigate'},follow_redirects=False)
+    assert response.status_code==307 and response.headers['cache-control']=='no-store'
+    assert response.headers['referrer-policy']=='no-referrer'
+
+
+def test_original_untrusted_host_is_rejected_before_adapter(monkeypatch):
+    monkeypatch.setattr(xhs_notes,'original_note_url',lambda *a:pytest.fail('untrusted Host must not resolve'))
+    response=client().get(ORIGINAL,params={'url':URL},headers={'Host':'evil.example'},follow_redirects=False)
+    assert response.status_code==400 and 'location' not in response.headers
+
+
+@pytest.mark.parametrize('destination',[
+    'https://www.xiaohongshu.com/explore/'+'a'*24+'?xsec_token=SECRET&xsec_source=pc_search',
+    URL+'?xsec_token=SECRET&xsec_source=pc_feed',
+    URL+'?xsec_token=SECRET&xsec_source=pc_search&web_session=PRIVATE',
+    URL+'?xsec_token=SECRET&xsec_token=OTHER&xsec_source=pc_search',
+])
+def test_original_destination_is_same_note_and_only_expected_locator_parameters(monkeypatch,destination):
+    monkeypatch.setattr(xhs_notes,'original_note_url',lambda url:destination)
+    response=client().get(ORIGINAL,params={'url':URL},follow_redirects=False)
+    assert response.status_code==502 and 'location' not in response.headers
+    assert 'SECRET' not in response.text and 'PRIVATE' not in response.text

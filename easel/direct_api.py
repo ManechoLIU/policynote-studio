@@ -133,7 +133,7 @@ async def stream_chat(settings: dict[str, str], content: str | list, *,
     except httpx.TimeoutException:
         raise DirectAPIError("API 请求超时，请检查网关或重试") from None
     except httpx.HTTPError:
-        raise DirectAPIError("API 连接失败，请确认网关正在运行且地址可达") from None
+        raise DirectAPIError("模型 API 连接失败，请检查配置的服务地址与网络") from None
     if finish_reason == "length":
         raise DirectAPIError("回复达到模型长度上限，已保留收到的内容，请重试或缩小请求")
     if finish_reason not in (None, "stop"):

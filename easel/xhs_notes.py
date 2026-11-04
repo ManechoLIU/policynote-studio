@@ -1,7 +1,7 @@
 """Read-only keyword search/detail adapter for the xhs CLI JSON envelope.
 
-Only status/search/read argv are permitted. Search order is upstream relevance,
-not a platform popularity ranking. Images are URLs, not evidence of image analysis.
+Only status/search/read argv are permitted. The bundled Redbook reader requests
+popular keyword results, not a platform-wide ranking. Images are URLs, not evidence of image analysis.
 No CLI, network or account files are touched until a public function is called.
 The adapter never retries; the installed CLI can retry/fall back internally.
 Risk-control latching covers errors visible in the final CLI envelope only.
@@ -9,6 +9,7 @@ Risk-control latching covers errors visible in the final CLI envelope only.
 from __future__ import annotations
 
 from copy import deepcopy
+from contextvars import ContextVar
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 import json
@@ -22,7 +23,7 @@ import subprocess
 import sys
 import threading
 import time
-from urllib.parse import urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 _SOURCE = 'xiaohongshu_cli'
 _TIMEOUT_SECONDS = 30
@@ -31,21 +32,32 @@ _CACHE_SECONDS = 60
 _CACHE_MAX_ENTRIES = 64
 _LOCK = threading.Lock()
 _CACHE: dict[tuple, tuple[float, dict]] = {}
+_NOTE_CONTEXTS: dict[tuple, tuple[float, dict]] = {}
+# Locators support later detail clicks; public search results still cache for 60s.
+_NOTE_CONTEXT_SECONDS = 15 * 60
+_NOTE_CONTEXT_MAX = _CACHE_MAX_ENTRIES * 20  # One bundled search page has at most 20 notes.
+_READ_CONTEXT = ContextVar('xhs_private_note_context', default=None)
+_EXPECTED_ACCOUNT = ContextVar('xhs_private_expected_search_account', default=None)
 _STOP_ERROR: str | None = None
 _NOTE_ID = re.compile(r'[0-9a-fA-F]{24}')
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_BUNDLED_SHIM = _PROJECT_ROOT / 'skills/shared/scripts/redbook_read.py'
+_REDBOOK_ENTRY = _PROJECT_ROOT / 'skills/builtin/skill-xhs-analyzer/dist/cli.js'
 _MESSAGES = {
     'invalid_query': '关键词须为1至100个字符，且不能以选项符号开头。',
     'invalid_limit': '数量须为1至100的整数。',
     'invalid_url': '请使用HTTPS小红书官方笔记链接；当前不支持短链。',
-    'cli_not_configured': '未找到可执行的xhs CLI，请配置EASEL_XHS_CLI。',
-    'auth_required': '小红书CLI尚未登录或登录已失效，请重新登录。',
+    'cli_not_configured': '小红书读取模块未就绪，请检查本地运行依赖。',
+    'auth_required': '小红书数据源尚未连接或登录已失效，请检查本工作台账号管理中的小红书连接。',
     'risk_control': '小红书触发验证或风控，已停止本进程后续请求；请处理后重启服务。',
-    'rate_limited': '小红书接口暂时不可用或限流；本应用未重跑CLI。',
-    'invalid_response': '小红书CLI返回的数据格式无法识别。',
-    'cli_failed': '小红书CLI执行失败；本应用未重跑CLI。',
-    'timeout': '小红书读取超时；本应用未重跑CLI。',
-    'output_too_large': '小红书CLI返回数据超过大小限制。',
+    'rate_limited': '小红书数据源暂时不可用或限流；本应用未重复读取。',
+    'invalid_response': '小红书数据源返回的数据格式无法识别。',
+    'cli_failed': '小红书读取模块执行失败；本应用未重复读取。',
+    'timeout': '小红书读取超时；本应用未重复读取。',
+    'output_too_large': '小红书数据源返回数据超过大小限制。',
     'busy': '已有小红书读取正在执行，请稍后再试。',
+    'original_unavailable': '原文访问上下文已失效或未找到，请重新搜索后再打开原文。',
+    'original_unsupported': '当前读取模块不支持原文跳转，请使用工作台默认数据源重新搜索。',
 }
 
 
@@ -57,7 +69,12 @@ class _CliError(Exception):
 
 def _resolve_cli() -> str:
     """Resolve one executable, never a command string and never install anything."""
-    configured = os.environ.get('EASEL_XHS_CLI', 'xhs').strip()
+    if 'EASEL_XHS_CLI' not in os.environ:
+        if (not _REDBOOK_ENTRY.is_file() or not shutil.which('node')
+                or not _BUNDLED_SHIM.is_file() or not os.access(_BUNDLED_SHIM, os.X_OK)):
+            raise _CliError('cli_not_configured')
+        return str(_BUNDLED_SHIM)
+    configured = os.environ['EASEL_XHS_CLI'].strip()
     if not configured or '\x00' in configured:
         raise _CliError('cli_not_configured')
     candidate = shutil.which(configured)
@@ -76,10 +93,33 @@ def _run_cli(executable: str, args: list[str], deadline: float):
         raise _CliError('cli_failed')
     if deadline <= time.monotonic():
         raise _CliError('timeout')
+    child_options = {}
+    command = [executable, *args]
+    if Path(executable).resolve() == _BUNDLED_SHIM.resolve():
+        # The bundled authorization bridge must close its browser before the
+        # existing outer process deadline. Custom CLI integrations are unchanged.
+        remaining_ms = int((deadline - time.monotonic()) * 1000) - 1000
+        if remaining_ms <= 0:
+            raise _CliError('timeout')
+        child_env = os.environ.copy()
+        child_env.pop('EASEL_XHS_NOTE_CONTEXT', None)
+        child_env.pop('EASEL_XHS_EXPECTED_ACCOUNT', None)
+        child_env.pop('EASEL_XHS_SEARCH_KEYWORD', None)
+        child_env['EASEL_XHS_READ_BUDGET_MS'] = str(remaining_ms)
+        expected_account = _EXPECTED_ACCOUNT.get()
+        if args[0] == 'search' and isinstance(expected_account, str) and expected_account:
+            child_env['EASEL_XHS_EXPECTED_ACCOUNT'] = expected_account
+        locator = _READ_CONTEXT.get()
+        if (args[0] == 'read' and isinstance(locator, dict)
+                and args[1] == f"https://www.xiaohongshu.com/explore/{locator.get('note_id')}"):
+            child_env['EASEL_XHS_NOTE_CONTEXT'] = json.dumps(locator, separators=(',', ':'))
+        child_options['env'] = child_env
+        command.insert(0, sys.executable)
     process = None
     try:
-        process = subprocess.Popen([executable, *args], stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, start_new_session=True)
+        process = subprocess.Popen(command, stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, start_new_session=True,
+            **child_options)
         output = bytearray()
         total = 0
         with selectors.DefaultSelector() as selector:
@@ -118,6 +158,8 @@ def _run_cli(executable: str, args: list[str], deadline: float):
                 raise _CliError('invalid_response')
             external = error['code']
             mapped = ('auth_required' if external == 'not_authenticated' else
+                      'busy' if external == 'profile_busy' else
+                      'timeout' if external == 'read_timeout' else
                       'risk_control' if external in ('verification_required', 'ip_blocked', 'signature_error') else
                       'rate_limited' if external in ('api_error', 'rate_limited') else 'cli_failed')
             raise _CliError(mapped)
@@ -193,9 +235,14 @@ def _image_url(value):
     try:
         p = urlsplit(value)
         host = p.hostname or ''
-        if (p.scheme == 'https' and not p.username and not p.password and p.port in (None, 443)
+        if (not p.username and not p.password
                 and (host == 'xhscdn.com' or host.endswith('.xhscdn.com'))):
-            return value
+            if p.scheme == 'https' and p.port in (None, 443):
+                return value
+            if p.scheme == 'http' and p.port in (None, 80):
+                # The official search API supplies HTTP CDN links. The UI only
+                # receives their HTTPS equivalent; plaintext is never requested.
+                return p._replace(scheme='https', netloc=host).geturl()
     except ValueError:
         pass
     return None
@@ -263,6 +310,11 @@ def _map_item(item, detail=False, expected_id=None):
     if expected_id and note_id != expected_id:
         raise _CliError('invalid_response')
     title = _text(note.get('title') if detail else note.get('display_title'), 300)
+    images = _images(note)
+    if not detail:
+        title = title or _text(note.get('title'), 300)
+        if title is None and images:
+            title = '无标题笔记'
     if title is None:
         raise _CliError('invalid_response')
     body = _text(note.get('desc')) if detail else None
@@ -270,7 +322,7 @@ def _map_item(item, detail=False, expected_id=None):
     metrics = note.get('interact_info') if isinstance(note.get('interact_info'), dict) else {}
     return {'id': note_id, 'title': title, 'body': body,
         'content_status': ('full' if body else 'unavailable') if detail else 'summary',
-        'images': _images(note), 'url': f'https://www.xiaohongshu.com/explore/{note_id}',
+        'images': images, 'url': f'https://www.xiaohongshu.com/explore/{note_id}',
         'author': _text(user.get('nickname'), 200) or _text(user.get('nick_name'), 200),
         'metrics': {'likes': _count(metrics.get('liked_count')), 'saves': _count(metrics.get('collected_count')),
                     'comments': _count(metrics.get('comment_count'))},
@@ -347,6 +399,100 @@ def _failure(query, code, phase=None):
             'error': {'code': code, 'message': message, 'retryable': False}}
 
 
+def _remember_note_contexts(cli, account, data, items):
+    """Search access locators stay private, bounded and scoped to the current account."""
+    if not account or Path(cli).resolve() != _BUNDLED_SHIM.resolve():
+        return
+    now = time.monotonic()
+    for key in [key for key, value in _NOTE_CONTEXTS.items() if value[0] <= now]:
+        del _NOTE_CONTEXTS[key]
+    allowed = {item['id'] for item in items}
+    for item in data.get('items', []):
+        if not isinstance(item, dict) or item.get('id') not in allowed:
+            continue
+        note_id = item['id']
+        card = item.get('note_card') if isinstance(item.get('note_card'), dict) else {}
+        tokens = [item.get('xsec_token'), card.get('xsec_token')]
+        for raw_url in (item.get('webUrl'), card.get('webUrl')):
+            try:
+                canonical, url_id = _canonical_url(raw_url)
+                if url_id == note_id:
+                    values = parse_qs(urlsplit(raw_url).query).get('xsec_token', [])
+                    if len(values) == 1:
+                        tokens.append(values[0])
+            except _CliError:
+                pass
+        tokens = {value for value in tokens if isinstance(value, str)
+                  and re.fullmatch(r'[A-Za-z0-9._~+/=-]{1,4096}', value)}
+        if len(tokens) != 1:
+            continue
+        key = (str(Path(cli).resolve()), account, note_id)
+        _NOTE_CONTEXTS.pop(key, None)
+        while len(_NOTE_CONTEXTS) >= _NOTE_CONTEXT_MAX:
+            del _NOTE_CONTEXTS[next(iter(_NOTE_CONTEXTS))]
+        _NOTE_CONTEXTS[key] = (now + _NOTE_CONTEXT_SECONDS,
+                              {'note_id': note_id, 'token': tokens.pop(), 'source': 'pc_search',
+                               'account_id': account})
+
+
+def _read_locator(cli, account, note_id):
+    if not account or Path(cli).resolve() != _BUNDLED_SHIM.resolve():
+        return None
+    key = (str(Path(cli).resolve()), account, note_id)
+    value = _NOTE_CONTEXTS.get(key)
+    if value and value[0] > time.monotonic():
+        return deepcopy(value[1])
+    _NOTE_CONTEXTS.pop(key, None)
+    return None
+
+
+def _account_id(status):
+    if not isinstance(status, dict):
+        raise _CliError('invalid_response')
+    if (status.get('authenticated') is False or status.get('isAuthenticated') is False
+            or (status.get('authenticated') is not True and status.get('isAuthenticated') is not True)):
+        raise _CliError('auth_required')
+    user = status.get('user')
+    if status.get('guest') is True or (isinstance(user, dict) and user.get('guest') is True):
+        raise _CliError('auth_required')
+    return _text(user.get('id'), 200) if isinstance(user, dict) else None
+
+
+def original_note_url(url: str) -> str:
+    """Resolve one explicit original click; never serialize this locator in JSON."""
+    global _STOP_ERROR
+    canonical, note_id = _canonical_url(url)
+    if url != canonical:
+        raise _CliError('invalid_url')
+    deadline = time.monotonic() + _TIMEOUT_SECONDS
+    if not _LOCK.acquire(timeout=_TIMEOUT_SECONDS):
+        raise _CliError('busy')
+    try:
+        if _STOP_ERROR:
+            raise _CliError(_STOP_ERROR)
+        cli = _resolve_cli()
+        if Path(cli).resolve() != _BUNDLED_SHIM.resolve():
+            raise _CliError('original_unsupported')
+        account = _account_id(_run_cli_stage(cli, ['status', '--json'], deadline))
+        if not account:
+            raise _CliError('auth_required')
+        locator = _read_locator(cli, account, note_id)
+        if (not locator or locator.get('note_id') != note_id or locator.get('account_id') != account
+                or locator.get('source') != 'pc_search' or not isinstance(locator.get('token'), str)
+                or not re.fullmatch(r'[A-Za-z0-9._~+/=-]{1,4096}', locator['token'])):
+            raise _CliError('original_unavailable')
+        return canonical + '?' + urlencode({'xsec_token': locator['token'], 'xsec_source': 'pc_search'})
+    except _CliError as exc:
+        if exc.code in ('auth_required', 'risk_control'):
+            _CACHE.clear()
+            _NOTE_CONTEXTS.clear()
+        if exc.code == 'risk_control':
+            _STOP_ERROR = exc.code
+        raise
+    finally:
+        _LOCK.release()
+
+
 def _execute(operation, target, limit, expected_id=None):
     global _STOP_ERROR
     deadline = time.monotonic() + _TIMEOUT_SECONDS
@@ -359,15 +505,7 @@ def _execute(operation, target, limit, expected_id=None):
         cli = _resolve_cli()
         phase = 'status'
         status = _run_cli_stage(cli, ['status', '--json'], deadline)
-        if not isinstance(status, dict):
-            raise _CliError('invalid_response')
-        if (status.get('authenticated') is False or status.get('isAuthenticated') is False
-                or (status.get('authenticated') is not True and status.get('isAuthenticated') is not True)):
-            raise _CliError('auth_required')
-        user = status.get('user')
-        if status.get('guest') is True or (isinstance(user, dict) and user.get('guest') is True):
-            raise _CliError('auth_required')
-        account = _text(user.get('id'), 200) if isinstance(user, dict) else None
+        account = _account_id(status)
         key = (cli, account, operation, target)
         now = time.monotonic()
         # Without a stable account identity, never reuse cached data.
@@ -377,10 +515,20 @@ def _execute(operation, target, limit, expected_id=None):
             result['cached'] = True
         else:
             phase = operation
-            data = _run_cli_stage(cli, [operation, target, '--json'], deadline)
+            context_token = _READ_CONTEXT.set(_read_locator(cli, account, expected_id)
+                                              if operation == 'read' else None)
+            account_token = _EXPECTED_ACCOUNT.set(account if operation == 'search'
+                and Path(cli).resolve() == _BUNDLED_SHIM.resolve() else None)
+            try:
+                data = _run_cli_stage(cli, [operation, target, '--json'], deadline)
+            finally:
+                _READ_CONTEXT.reset(context_token)
+                _EXPECTED_ACCOUNT.reset(account_token)
             result = {'query': target, 'items': _parse_items(data, operation, expected_id),
                       'source': _SOURCE, 'fetched_at': datetime.now(timezone.utc).isoformat(),
                       'cached': False, 'error': None}
+            if operation == 'search':
+                _remember_note_contexts(cli, account, data, result['items'])
             if account:
                 for old in [k for k, v in _CACHE.items() if v[0] <= now]:
                     del _CACHE[old]
@@ -392,6 +540,7 @@ def _execute(operation, target, limit, expected_id=None):
     except _CliError as exc:
         if exc.code in ('auth_required', 'risk_control'):
             _CACHE.clear()
+            _NOTE_CONTEXTS.clear()
         if exc.code == 'risk_control':
             _STOP_ERROR = exc.code
         return _failure(target, exc.code, phase)

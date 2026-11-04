@@ -275,6 +275,7 @@ export class XhsClient {
       search_id: searchId,
       sort,
       note_type: noteType,
+      image_formats: ["jpg", "webp", "avif"],
     });
   }
 

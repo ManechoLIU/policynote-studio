@@ -849,20 +849,55 @@ def _click_publish_tab(page, tabname: str) -> None:
     _die(f"未找到发布 TAB：{tabname}（页面结构可能已变，检查 SELECTORS.creator_tab）")
 
 
+_IMAGE_UPLOAD_STATES = r'''() => {
+    const visible = node => !!node && node.isConnected && node.getClientRects().length > 0
+        && getComputedStyle(node).visibility !== 'hidden' && getComputedStyle(node).display !== 'none';
+    return [...document.querySelectorAll('.img-preview-area .pr')].map(slot => {
+        const text = (slot.innerText || '').replace(/\s+/g, '');
+        const images = [...slot.querySelectorAll('img.img.preview')];
+        const controls = [...slot.querySelectorAll('.image-editor-control .image-editor-actions.has-editor-info button.edit-btn')];
+        const image = images.length === 1 ? images[0] : null;
+        const control = controls.length === 1 ? controls[0] : null;
+        return {
+            visible: visible(slot),
+            loaded: visible(image) && image.complete === true && image.naturalWidth > 0 && image.naturalHeight > 0,
+            ready: visible(control) && control.disabled === false && control.getAttribute('aria-disabled') !== 'true',
+            pending: !!slot.querySelector('.processing-container, .progress-container, .spinner-red, .prerender, .mask.uploading'),
+            failed: text.includes('上传失败'), retry: text.includes('重试')
+        };
+    });
+}'''
+
+
 def _upload_images(page, paths: list[str]) -> None:
-    """逐张上传并等预览出现（≤60s/张）。REF uploadImages/waitForUploadComplete。"""
+    """Wait for every observed image slot to finish processing; never retry an upload."""
     for i, path in enumerate(paths):
         sel = SELECTORS["upload_input_first"] if i == 0 else SELECTORS["upload_input_more"]
         page.set_input_files(sel, path)
-        print(f"  上传图片 {i+1}/{len(paths)}: {path}", file=sys.stderr)
-        deadline = time.time() + 60
-        while time.time() < deadline:
-            if len(page.query_selector_all(SELECTORS["img_preview"])) >= i + 1:
+        print(f"  等待图片 {i+1}/{len(paths)} 上传完成", file=sys.stderr)
+        deadline = time.monotonic() + 60
+        while True:
+            try:
+                states = page.evaluate(_IMAGE_UPLOAD_STATES)
+                fields = ('visible', 'loaded', 'ready', 'pending', 'failed', 'retry')
+                if not isinstance(states, list) or any(not isinstance(state, dict) or any(
+                        type(state.get(field)) is not bool for field in fields) for state in states):
+                    raise ValueError('image upload state unavailable')
+            except Exception as error:
+                _draft_button_diagnostic('image_upload_unconfirmed', errorCode='XHS_IMAGE_UPLOAD_UNCONFIRMED',
+                                         error_type=_auth_error_type(error))
+                _die('XHS_IMAGE_UPLOAD_UNCONFIRMED：无法核验图片上传状态；未执行保存')
+            if any(state['failed'] or state['retry'] for state in states):
+                _draft_button_diagnostic('image_upload_failed', errorCode='XHS_IMAGE_UPLOAD_FAILED', states=states[:18])
+                _die('XHS_IMAGE_UPLOAD_FAILED：平台显示图片上传失败或待重试；未执行保存')
+            if time.monotonic() >= deadline:
+                _draft_button_diagnostic('image_upload_timeout', errorCode='XHS_IMAGE_UPLOAD_UNCONFIRMED',
+                                         required_count=i + 1, states=states[:18])
+                _die('XHS_IMAGE_UPLOAD_UNCONFIRMED：图片上传完成状态未确认（60s）；未执行保存')
+            if len(states) == i + 1 and all(state['visible'] and state['loaded'] and state['ready']
+                                            and not state['pending'] for state in states):
                 break
             page.wait_for_timeout(500)
-        else:
-            _die(f"第 {i+1} 张图片上传超时（60s）")
-        page.wait_for_timeout(1000)
 
 
 def _upload_video(page, path: str) -> None:
@@ -1312,6 +1347,61 @@ def _draft_control_label(button):
     return '' if text and aria and text != aria else (text or aria)
 
 
+def _picture_edit_guide_button(dialog):
+    """Recognise only the observed image-edit onboarding, never a save dialog."""
+    if (dialog.get_attribute('role') != 'dialog'
+            or set((dialog.get_attribute('class') or '').split()) != {'feature-guide', 'feature-guide--with-arrow'}):
+        return None
+    if dialog.evaluate('node => node.isConnected && node.ownerDocument === document && window === window.top') is not True:
+        return None
+    if dialog.query_selector(_DRAFT_EDITABLE):
+        return None
+    buttons = [button for button in dialog.query_selector_all('button,[role="button"]') if button.is_visible()]
+    labels = [_draft_control_label(button) for button in buttons]
+    if len(buttons) not in (1, 2) or labels.count('我知道了') != 1:
+        return None
+    for button, label in zip(buttons, labels):
+        if label == '我知道了':
+            continue
+        if (button.get_attribute('class') != 'feature-guide__close'
+                or label not in ('', '关闭', '关闭新功能引导')) or (label == '' and (
+                (button.inner_text() or '').strip() or (button.get_attribute('aria-label') or '').strip())):
+            return None
+    acknowledgement = buttons[labels.index('我知道了')]
+    if acknowledgement.get_attribute('class') != 'feature-guide__btn' or not acknowledgement.is_enabled():
+        return None
+    expected = '图片可以编辑啦，快来试试吧支持裁剪图片大小、选择模版或滤镜、添加贴纸和文字我知道了'
+    if re.sub(r'\s+', '', dialog.inner_text() or '') != expected:
+        return None
+    return acknowledgement
+
+
+def _dismiss_picture_edit_guide(page):
+    # This one-time onboarding click precedes the receipt baseline. It is not a
+    # draft action or receipt; all unrecognised dialogs retain the baseline veto.
+    dialogs = _visible_draft_dialogs(page)
+    if len(dialogs) != 1:
+        return
+    url = urlparse(page.url or '')
+    if url.scheme != 'https' or url.netloc != 'creator.xiaohongshu.com' or url.path != '/publish/publish':
+        return
+    dialog = dialogs[0]
+    button = _picture_edit_guide_button(dialog)
+    if button is None:
+        return
+    fresh_dialogs = _visible_draft_dialogs(page)
+    if (len(fresh_dialogs) != 1
+            or fresh_dialogs[0].evaluate('(node, previous) => node === previous', dialog) is not True):
+        raise ValueError('picture guide changed before dismissal')
+    fresh_button = _picture_edit_guide_button(fresh_dialogs[0])
+    if fresh_button is None or fresh_button.evaluate('(node, previous) => node === previous', button) is not True:
+        raise ValueError('picture guide control changed before dismissal')
+    # Native click retains actionability/hit checks. Never retry an uncertain click.
+    fresh_button.click(timeout=5000)
+    dialog.wait_for_element_state('hidden', timeout=5000)
+    _draft_button_diagnostic('picture_edit_guide_dismissed')
+
+
 def _draft_confirmation_button(dialog, document_marker):
     if dialog.evaluate(_DRAFT_NOTICE_DOCUMENT, document_marker) not in ('same', 'new'):
         raise ValueError('confirmation document unavailable')
@@ -1448,6 +1538,7 @@ def _save_draft(page, timeout_s: float = 30, *, attempt=None) -> None:
     # become fresh evidence when made visible, moved, or cloned after the click.
     document_marker = {'key': '_xhs_draft_receipt_' + os.urandom(16).hex(), 'value': os.urandom(16).hex()}
     try:
+        _dismiss_picture_edit_guide(page)
         if page.evaluate(_DRAFT_DOCUMENT_MARK, document_marker) is not True:
             raise ValueError('document marker unavailable')
         before_text = page.locator("body").text_content(timeout=5000) or ""
@@ -1624,6 +1715,43 @@ def _query_safe(page, selector: str):
         return None
 
 
+_LOGIN_BOX = ".login-container, .login-modal, .login-box, .sso-login-wrapper"
+
+
+def _community_login_surface_ready(page) -> bool:
+    """已登录、明确错误，或二维码/登录框已经可见。可见不等于登录成功。"""
+    if _login_error(page):
+        return True
+    try:
+        if _is_logged_in(page):
+            return True
+    except Exception:
+        pass
+    try:
+        qr = _visible_login_element(page, SELECTORS["qrcode"])
+        if qr is not None:
+            box = qr.bounding_box() or {}
+            if (box.get("width") or 0) >= 96 and (box.get("height") or 0) >= 96:
+                return True
+    except Exception:
+        pass
+    try:
+        return _visible_login_element(page, _LOGIN_BOX) is not None
+    except Exception:
+        return False
+
+
+def _wait_community_login_surface(page) -> None:
+    """先探测再等。未就绪最多 10×800ms，就绪则立刻交给原抓码流程。"""
+    for _ in range(10):
+        try:
+            if _community_login_surface_ready(page):
+                return
+        except Exception:
+            pass
+        page.wait_for_timeout(800)
+
+
 def cmd_login(a) -> int:
     """headless 友好登录：把二维码抠成 PNG 供扫码，轮询登录成功后持久化 cookie。
     REF login.go FetchQrcodeImage/WaitForLogin。远程无桌面环境靠图片扫码，非有头窗口。"""
@@ -1669,15 +1797,8 @@ def cmd_login(a) -> int:
                           file=sys.stderr)
 
                 # 等待页面稳定并完成可能的跳转（登录引导 / 风险拦截 / 已登录态）
-                for _ in range(0 if explore_failed else 10):
-                    page.wait_for_timeout(800)
-                    if _login_error(page):
-                        break
-                    try:
-                        if _is_logged_in(page):
-                            break
-                    except Exception:
-                        pass
+                if not explore_failed:
+                    _wait_community_login_surface(page)
 
                 if _is_logged_in(page):
                     login_state.write_status(sf, "success", "已登录")
