@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "明亚工作台浏览器连接",
+  "version": "1.0.10",
+  "minimum_chrome_version": "118",
+  "permissions": [
+    "storage",
+    "scripting",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://creator.xiaohongshu.com/*",
+    "http://127.0.0.1:7862/*",
+    "http://localhost:7862/*"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1:7862/*",
+        "http://localhost:7862/*"
+      ],
+      "js": [
+        "relay.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

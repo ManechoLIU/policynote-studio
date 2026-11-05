@@ -4410,6 +4410,29 @@ class SmsCodeRequest(BaseModel):
     code: str
 
 
+@app.get('/api/browser-extension/download')
+async def api_browser_extension_download():
+    import io
+    import zipfile
+    names = ('manifest.json', 'background.js', 'relay.js', 'popup.html', 'popup.js',
+             'xhs-draft.mjs', 'README.md')
+    root = PROJECT_ROOT / 'browser-extension'
+    files = [root / name for name in names]
+    if any(path.is_symlink() or not path.is_file() for path in files):
+        raise HTTPException(503, '浏览器连接扩展尚未准备完成')
+    if sum(path.stat().st_size for path in files) > 2 * 1024 * 1024:
+        raise HTTPException(503, '浏览器连接扩展包未通过大小检查')
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for path in files:
+            archive.writestr(path.name, path.read_bytes())
+    from fastapi.responses import Response
+    return Response(buffer.getvalue(), media_type='application/zip', headers={
+        'Content-Disposition': 'attachment; filename="mingya-browser-extension.zip"',
+        'Cache-Control': 'no-store',
+    })
+
+
 @app.post("/api/login/{platform}/sms")
 async def api_login_sms(platform: str, req: SmsCodeRequest):
     """回填短信验证码：写入 runner 轮询的一次性验证码文件（见 login_state.read_sms_code）。

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<title>浏览器连接</title>
+<body>
+  <h1>连接工作台</h1>
+  <p>在此浏览器中连接您的工作台。图文草稿保存在当前浏览器的本地草稿箱。</p>
+  <label>工作台地址 <input id="origin" type="url" placeholder="https://example.com"></label>
+  <button id="connect">连接并授权</button>
+  <p id="status" role="status"></p>
+  <section aria-labelledby="receipt-heading">
+    <h2 id="receipt-heading">草稿任务保护</h2>
+    <p id="receipt-status" role="status">请刷新查看当前工作台的最近任务。</p>
+    <button id="refresh-receipt" type="button">刷新任务状态</button>
+    <button id="review-unknown" type="button" disabled>已检查草稿箱，解除提交保护</button>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>

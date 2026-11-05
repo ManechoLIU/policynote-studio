@@ -3,6 +3,8 @@ import {
   createSchedule, executeSkill, runAgent, streamChat,
   fetchAccounts, publishNow, publishStatus, submitPublishSms, fetchOutputs, mediaUrl,
 } from '../lib/api';
+import { confirmClientDraftReview, getClientBrowserStatus, openClientXhsDrafts, prepareClientDraftReview, saveClientXhsDraft } from '../lib/clientBrowser';
+import type { ClientBrowserResult, ClientDraftImage } from '../lib/clientBrowser';
 import type { AccountItem, OutputFile } from '../lib/api';
 import { loadPublishDraft, savePublishDraft } from '../lib/store';
 import { renderMarkdown } from '../lib/sanitize';
@@ -21,7 +23,7 @@ const PLATFORM_ART: Record<string, readonly [number, number, number, number]> = 
 const DISPLAY_ORDER = ['xiaohongshu','douyin','wechat-oa','weixin-channels','bilibili','zhihu','kuaishou'];
 
 const PLATFORMS: { key: string; label: string; titleLimit?: number; bodyLimit: number; hint: string }[] = [
-  { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, hint: '标题≤20，正文≤1000，重情绪+话题标签；仅存工作台专用浏览器的本地草稿，未公开发布；手机 App 不自动显示' },
+  { key: 'xiaohongshu', label: '小红书', titleLimit: 20, bodyLimit: 1000, hint: '标题≤20，正文≤1000，重情绪+话题标签；图文草稿保存在当前日常 Chrome 个人配置的小红书草稿箱，未公开发布。视频仍走原有服务端通道，那不是日常使用的 Chrome。' },
   { key: 'douyin', label: '抖音', titleLimit: 55, bodyLimit: 55, hint: '文案≤55，前几字是钩子' },
   { key: 'kuaishou', label: '快手', titleLimit: 30, bodyLimit: 1000, hint: '视频或图片(图文)，标题≤30，需附媒体' },
   { key: 'weixin-channels', label: '视频号', bodyLimit: 1000, hint: '需附视频，短描述+话题标签，微信扫码登录' },
@@ -39,6 +41,96 @@ const MEDIA_REQUIRED = new Set(['xiaohongshu', 'douyin', 'kuaishou', 'weixin-cha
 // 只能发视频的平台（抖音/视频号/B站：图文不走此链路，必须视频）
 const VIDEO_ONLY = new Set(['douyin', 'weixin-channels', 'bilibili']);
 const VIDEO_RE = /\.(mp4|mov|webm|mkv|avi|m4v|flv|ts)$/i;
+const CLIENT_IMAGE_MIME = new Set(['image/png', 'image/jpeg', 'image/webp']);
+const CLIENT_IMAGE_MAX_COUNT = 18;
+const CLIENT_IMAGE_MAX_BYTES = 30 * 1024 * 1024;
+const CLIENT_SINGLE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
+const CLIENT_MISSING = '首次使用请下载浏览器连接器，在你平时使用的 Chrome 中安装，并在扩展设置中连接此工作台地址，然后刷新页面。';
+
+function createClientAbort() {
+  if (typeof AbortController !== 'undefined') return new AbortController();
+  const listeners = new Set<() => void>();
+  const signal = {
+    aborted: false,
+    addEventListener(_type: string, listener: () => void) { listeners.add(listener); },
+    removeEventListener(_type: string, listener: () => void) { listeners.delete(listener); },
+  };
+  return {
+    signal: signal as AbortSignal,
+    abort() {
+      if (signal.aborted) return;
+      signal.aborted = true;
+      listeners.forEach((listener) => listener());
+    },
+  };
+}
+
+function parseTags(value: string): string[] {
+  return value.split(/[,，]/).map((tag) => tag.trim()).filter(Boolean);
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunk));
+  }
+  return btoa(binary);
+}
+
+async function loadClientDraftImages(paths: string[], signal?: AbortSignal): Promise<ClientDraftImage[]> {
+  if (paths.length === 0 || paths.length > CLIENT_IMAGE_MAX_COUNT) throw new Error('图片数量需在 1 到 18 张');
+  let total = 0;
+  const images: ClientDraftImage[] = [];
+  for (const path of paths) {
+    const resolved = new URL(mediaUrl(path), location.origin);
+    if (resolved.origin !== location.origin) throw new Error('只下载本站图片，未保存小红书草稿');
+    const response = await fetch(resolved.href, { credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal });
+    if (!response.ok || !response.url || new URL(response.url).origin !== location.origin) throw new Error('图片下载来源无效，未保存小红书草稿');
+    const mime = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!CLIENT_IMAGE_MIME.has(mime)) throw new Error('图片格式仅支持 PNG、JPEG、WebP，未保存小红书草稿');
+    const rawLength = response.headers.get('content-length');
+    if (rawLength !== null) {
+      if (!/^\d+$/.test(rawLength)) throw new Error('图片大小无效，未保存小红书草稿');
+      const length = Number(rawLength);
+      if (!Number.isSafeInteger(length) || length > CLIENT_SINGLE_IMAGE_MAX_BYTES || total + length > CLIENT_IMAGE_MAX_BYTES) throw new Error('单张图片不能超过 10MiB，总大小不能超过 30MiB，未保存小红书草稿');
+    }
+    if (!response.body) throw new Error('图片流不可用，未保存小红书草稿');
+    const reader = response.body.getReader();
+    const chunks: Uint8Array[] = [];
+    let size = 0;
+    try {
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        size += part.value.byteLength;
+        if (size > CLIENT_SINGLE_IMAGE_MAX_BYTES || total + size > CLIENT_IMAGE_MAX_BYTES) throw new Error('单张图片不能超过 10MiB，总大小不能超过 30MiB，未保存小红书草稿');
+        chunks.push(part.value);
+      }
+    } finally {
+      await reader.cancel().catch(() => {});
+      reader.releaseLock();
+    }
+    if (!size) throw new Error('图片为空，未保存小红书草稿');
+    total += size;
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    const name = decodeURIComponent(resolved.pathname.split('/').pop() || 'image');
+    images.push({ name, mime: mime as ClientDraftImage['mime'], base64: bytesToBase64(bytes) });
+  }
+  return images;
+}
+
+function clientDraftMessage(result: ClientBrowserResult): { status: 'ok' | 'fail'; msg: string } {
+  if (result.published !== false) return { status: 'fail', msg: '未确认保存至小红书草稿。请先查看小红书草稿，勿重复提交。' };
+  if (result.ok && result.state === 'saved') return { status: 'ok', msg: '已保存至当前浏览器的小红书草稿，未公开发布。这是本次新草稿。' };
+  if (result.ok && result.state === 'record_found') return { status: 'ok', msg: '草稿箱已核对到本次新增记录；请打开检查正文和图片。未公开发布。' };
+  if (result.state === 'unconfirmed') return { status: 'fail', msg: '保存结果未确认。请先查看小红书草稿，勿重复提交。' };
+  if (result.state === 'auth_required') return { status: 'fail', msg: result.message.trim() || '请在当前浏览器打开的小红书创作者页面登录后再保存草稿。' };
+  if (result.state === 'unavailable') return { status: 'fail', msg: result.message.trim() || CLIENT_MISSING };
+  return { status: 'fail', msg: result.message.trim() || '保存小红书草稿失败。请先查看小红书草稿，勿重复提交。' };
+}
 
 function parseSections(text: string): Record<string, string> {
   const parts = text.split(/^\s*={2,}\s*(.+?)\s*={2,}\s*$/m);
@@ -78,13 +170,28 @@ export default function PublishPage({ persona }: PublishPageProps) {
   const [pubSms, setPubSms] = useState<{ platform: string; name: string; state: string; message: string } | null>(null);
   const [pubSmsCode, setPubSmsCode] = useState('');
   const [pubSmsBusy, setPubSmsBusy] = useState(false);
+  const [clientBusy, setClientBusy] = useState<'connect' | 'open' | 'draft' | 'review' | ''>('');
+  const [clientMsg, setClientMsg] = useState(CLIENT_MISSING);
+  const clientAlive = useRef(true);
+  const clientAbort = useRef<{ abort: () => void; signal: AbortSignal } | null>(null);
+  const clientLock = useRef(false);
+  const publishLock = useRef(false);
 
   // 草稿持久化：任何改动即写 localStorage，切页/刷新回来都在
   useEffect(() => {
     savePublishDraft({ title, body, platforms, overrides, tags });
   }, [title, body, platforms, overrides, tags]);
 
-  useEffect(() => () => adaptCtl.current?.abort(), []);   // 离开页面中止流
+  useEffect(() => () => { adaptCtl.current?.abort(); }, []);   // 离开页面中止流
+  useEffect(() => {
+    clientAlive.current = true;
+    const controller = createClientAbort();
+    clientAbort.current = controller;
+    return () => {
+      clientAlive.current = false;
+      controller.abort();
+    };
+  }, []);
 
   // 登录态 + 可选媒体列表
   useEffect(() => {
@@ -188,9 +295,15 @@ export default function PublishPage({ persona }: PublishPageProps) {
 
   // D. 平台提交（小红书/公众号仅存平台草稿，其他平台公开发布；二次确认）
   const publishAll = async () => {
-    if (empty || publishing || checking) return;
+    if (empty || publishing || checking || publishLock.current) return;
+    const usesClient = platforms.includes('xiaohongshu') && !selectedMedia.some(isVideoPath);
+    if (usesClient && clientLock.current) return;
+    if (usesClient) { clientLock.current = true; setClientBusy('draft'); }
+    publishLock.current = true;
     const targets = PLATFORMS.filter((p) => platforms.includes(p.key) && PUBLISHABLE.has(p.key));
     if (targets.length === 0) {
+      publishLock.current = false;
+      if (usesClient) { clientLock.current = false; setClientBusy(''); }
       showToast('所选平台暂不支持一键发布（B站请用「复制」或终端 biliup）');
       return;
     }
@@ -207,13 +320,14 @@ export default function PublishPage({ persona }: PublishPageProps) {
     const okToSend = window.confirm(
       `发布前预检已执行，结果已显示在页面中。人设评分只做提醒，不会阻止提交。\n\n` +
       (publicTargets.length ? `公开发布：${publicTargets.map((target) => target.label).join('、')}。\n` : '') +
-      (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。小红书草稿仅存工作台专用浏览器本地，手机 App 不自动显示。\n` : '') +
+      (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。小红书图文草稿保存在当前日常 Chrome 的小红书草稿箱。视频仍走原有服务端通道，那不是日常使用的 Chrome。\n` : '') +
       `确定继续？`);
-    if (!okToSend) return;
+    if (!okToSend) { publishLock.current = false; if (usesClient) { clientLock.current = false; setClientBusy(''); } return; }
 
     setPublishing(true);
     for (const t of targets) {
-      if (!loginOf(t.key)) {
+      const clientImageDraft = t.key === 'xiaohongshu' && !selectedMedia.some((path) => isVideoPath(path));
+      if (!clientImageDraft && !loginOf(t.key)) {
         setPub((r) => ({ ...r, [t.key]: { status: 'fail', msg: '未登录 · 去账号页登录' } }));
         continue;
       }
@@ -225,16 +339,29 @@ export default function PublishPage({ persona }: PublishPageProps) {
         setPub((r) => ({ ...r, [t.key]: { status: 'fail', msg: `${t.label}只能发视频，请从内容库选一个视频` } }));
         continue;
       }
-      setPub((r) => ({ ...r, [t.key]: { status: 'publishing', msg: t.key === 'xiaohongshu' ? '保存浏览器本地草稿中…可能需 1-2 分钟' : DRAFT_PLATFORMS.has(t.key) ? '保存平台草稿中…可能需 1-2 分钟' : '发布中…可能需 1-2 分钟' } }));
+      setPub((r) => ({ ...r, [t.key]: { status: 'publishing', msg: t.key === 'xiaohongshu' ? (clientImageDraft ? '保存当前浏览器图文草稿中…可能需 1-2 分钟' : '通过服务端保存视频草稿中…可能需 1-2 分钟') : DRAFT_PLATFORMS.has(t.key) ? '保存平台草稿中…可能需 1-2 分钟' : '发布中…可能需 1-2 分钟' } }));
       try {
+        if (clientImageDraft) {
+          let images: ClientDraftImage[];
+          try {
+            images = await loadClientDraftImages(selectedMedia, clientAbort.current?.signal);
+          } catch (error) {
+            if (clientAlive.current) setPub((r) => ({ ...r, [t.key]: { status: 'fail', msg: error instanceof Error ? error.message : '图片下载失败，未保存小红书草稿' } }));
+            continue;
+          }
+          const draft = await saveClientXhsDraft({ title, body: effective(t.key), tags: parseTags(tags), images }, clientAbort.current?.signal);
+          if (!clientAlive.current) continue;
+          setPub((r) => ({ ...r, [t.key]: clientDraftMessage(draft) }));
+          continue;
+        }
         const res = await publishNow(t.key, { title, body: effective(t.key), media: selectedMedia, tags });
         if (t.key === 'xiaohongshu') {
           const saved = res.ok === true && res.outcome === 'draft_saved' && res.published === false && !res.async;
           const failureMessage = res.ok === false
-            ? `${typeof res.message === 'string' && res.message.trim() ? res.message : '保存小红书草稿失败'}。请先检查创作者后台草稿，勿重复提交（请使用工作台专用浏览器查看）`
-            : '未确认保存至小红书草稿，请检查工作台专用浏览器内的小红书草稿箱';
+            ? `${typeof res.message === 'string' && res.message.trim() ? res.message : '保存小红书草稿失败'}。请先检查创作者后台草稿，勿重复提交（请用明亚工作台的 Chrome 查看同一环境本地草稿）`
+            : '未确认保存至小红书草稿，请用明亚工作台的 Chrome 查看同一环境的小红书草稿箱';
           setPub((r) => ({ ...r, [t.key]: saved
-            ? { status: 'ok', msg: '已保存至小红书草稿，未公开发布（仅工作台专用浏览器本地，手机 App 不自动显示）' }
+            ? { status: 'ok', msg: '已保存至小红书草稿，未公开发布（服务端视频通道回执）。' }
             : { status: 'fail', msg: failureMessage } }));
         } else if (t.key === 'wechat-oa') {
           setPub((r) => ({ ...r, [t.key]: res.ok && !res.async
@@ -256,6 +383,8 @@ export default function PublishPage({ persona }: PublishPageProps) {
       }
     }
     setPublishing(false);
+    publishLock.current = false;
+    if (usesClient) { clientLock.current = false; if (clientAlive.current) setClientBusy(''); }
     showToast('提交流程结束，见各平台卡片状态');
   };
 
@@ -318,6 +447,68 @@ export default function PublishPage({ persona }: PublishPageProps) {
     showToast('已存为本地排期草稿并加入今天的日历，未保存至平台草稿箱');
   };
 
+  const connectBrowser = async () => {
+    if (clientLock.current) return;
+    clientLock.current = true;
+    setClientBusy('connect');
+    try {
+      const res = await getClientBrowserStatus(clientAbort.current?.signal);
+      if (!clientAlive.current) return;
+      if (res.ok === true && res.state === 'connected' && res.published === false) setClientMsg(res.message.trim() || '已连接当前浏览器。');
+      else setClientMsg(res.state === 'unavailable' ? (res.message.trim() || CLIENT_MISSING) : (res.message.trim() || CLIENT_MISSING));
+    } catch {
+      if (clientAlive.current) setClientMsg(CLIENT_MISSING);
+    } finally {
+      clientLock.current = false;
+      if (clientAlive.current) setClientBusy('');
+    }
+  };
+
+  const openClientDrafts = async () => {
+    if (clientLock.current) return;
+    clientLock.current = true;
+    setClientBusy('open');
+    try {
+      const res = await openClientXhsDrafts(clientAbort.current?.signal);
+      if (!clientAlive.current) return;
+      if (res.ok === true && res.state === 'opened' && res.published === false) setClientMsg('已在当前浏览器打开小红书创作页。请查看草稿箱。本操作不会保存或发布。');
+      else setClientMsg(res.message.trim() || '打开小红书草稿失败');
+    } catch {
+      if (clientAlive.current) setClientMsg('打开小红书草稿失败');
+    } finally {
+      clientLock.current = false;
+      if (clientAlive.current) setClientBusy('');
+    }
+  };
+
+  const reviewClientDraft = async () => {
+    if (clientLock.current) return;
+    clientLock.current = true;
+    setClientBusy('review');
+    try {
+      const prepared = await prepareClientDraftReview(clientAbort.current?.signal);
+      if (!clientAlive.current) return;
+      if (prepared.ok === true && prepared.state === 'reviewed') {
+        setClientMsg(prepared.message.trim() || '当前没有待核对任务。');
+        return;
+      }
+      if (prepared.ok !== true || prepared.state !== 'review_ready' || !prepared.reviewToken) {
+        setClientMsg(prepared.message.trim() || '解除保护结果未确认，请刷新状态核对；不会自动重试');
+        return;
+      }
+      const accepted = window.confirm('我已在当前浏览器草稿箱核对上次任务。此操作仅记录人工核对，不会重试、上传、删除或发布。');
+      if (!accepted) return;
+      const reviewed = await confirmClientDraftReview(prepared.reviewToken, clientAbort.current?.signal);
+      if (!clientAlive.current) return;
+      setClientMsg(reviewed.message.trim() || (reviewed.ok && reviewed.state === 'reviewed' ? '已解除提交保护。' : '解除保护结果未确认，请刷新状态核对；不会自动重试'));
+    } catch {
+      if (clientAlive.current) setClientMsg('解除保护结果未确认，请刷新状态核对；不会自动重试');
+    } finally {
+      clientLock.current = false;
+      if (clientAlive.current) setClientBusy('');
+    }
+  };
+
   const canPublish = platforms.some((k) => PUBLISHABLE.has(k));
   const targets = PLATFORMS.filter((platform) => platforms.includes(platform.key) && PUBLISHABLE.has(platform.key));
   const hasDraftTarget = targets.some((platform) => DRAFT_PLATFORMS.has(platform.key));
@@ -332,7 +523,24 @@ export default function PublishPage({ persona }: PublishPageProps) {
     <div className="publish-page">
       <div className="publish-editor">
         <h1 className="page-title"><IconPublish size={21} /> 发布中心</h1>
-        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 提交。小红书仅存工作台专用浏览器本地草稿，公众号存平台草稿，其他平台公开发布。</p>
+        <p className="page-subtitle">一次编辑 → AI 一键改写成各平台版本 → 预检 → 附媒体 → 提交。小红书图文仅存当前日常 Chrome 的小红书草稿箱，未公开发布；公众号存平台草稿，其他平台公开发布。视频不走当前浏览器扩展。</p>
+        <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={connectBrowser}>
+          {clientBusy === 'connect' ? '正在连接当前浏览器…' : '连接当前浏览器'}
+        </button>
+        <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={openClientDrafts}>
+          {clientBusy === 'open' ? '正在打开草稿…' : '查看小红书草稿'}
+        </button>
+        <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={reviewClientDraft}>
+          {clientBusy === 'review' ? '正在核对保护…' : '核对后解除保护'}
+        </button>
+        <a className="btn btn-sm" href="/api/browser-extension/download" download>下载浏览器连接器</a>
+        <p className="pv-hint" aria-live="polite">{clientMsg}</p>
+        <details className="pv-hint">
+          <summary>首次连接说明</summary>
+          <p>在你平时使用的 Chrome 中打开工作台。下载并解压连接器，在 Chrome 的扩展管理页面选择「加载已解压的扩展程序」，选中解压目录，按浏览器提示确认权限。打开连接器，填入此工作台地址并连接，再刷新工作台。每位使用者只需在自己的浏览器中安装一次。</p>
+          <p>连接器已连接不代表小红书已登录。草稿保存在这个 Chrome 个人配置中，其他浏览器和手机 App 不会自动同步。</p>
+        </details>
+        {platforms.includes('xiaohongshu') && selectedMedia.some(isVideoPath) && <p className="pv-hint">小红书视频仍走原有服务端通道，不是日常使用的 Chrome 个人配置，也不会由当前浏览器扩展保存。</p>}
 
         <label className="field-label">标题</label>
         <input className="field" value={title} placeholder="标题（部分平台需要）"
@@ -342,7 +550,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
           placeholder="写下你的内容，右侧按各平台规则实时预览；点「一键适配」让 AI 分平台改写…"
           onChange={(e) => setBody(e.target.value)} />
 
-        <label className="field-label">话题标签 <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: 12 }}>（逗号分隔，如「AI,职场,干货」；小红书会用 # 联想真正绑定话题）</span></label>
+        <label className="field-label">话题标签 <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: 12 }}>（逗号分隔，如「AI,职场,干货」；当前仅把 #标签拼进正文文本，尚未实现平台话题联想绑定）</span></label>
         <input className="field" value={tags} placeholder="AI,职场,干货"
           onChange={(e) => setTags(e.target.value)} />
 
@@ -376,7 +584,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
           </div>
         )}
 
-        <p className="publish-saved-note">本地编辑草稿已自动保存，切换页面/刷新回来内容都在，不等于平台草稿。提交仅对「已登录 + 媒体齐全」的平台生效。</p>
+        <p className="publish-saved-note">本地编辑草稿已自动保存，切换页面/刷新回来内容都在，不等于平台草稿。小红书图文在当前浏览器检查登录状态；其他通道需对应账号已登录且媒体齐全。</p>
         {checkResult && (
           <div className="panel" style={{ marginTop: 14 }}>
             <div className="panel-title"><IconCheck size={14} /> 发布前预检</div>
@@ -386,7 +594,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
       </div>
 
       <div className="publish-previews">
-<section className="mingya-publish-platforms"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />发布平台 <small>（可多选）</small></h2><div className="mingya-platform-options">{[...PLATFORMS].sort((a,b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key)).map((p) => <button key={p.key} type="button" className={`mingya-platform-option ${platforms.includes(p.key) ? 'selected' : ''}`} aria-pressed={platforms.includes(p.key)} onClick={() => toggle(p.key)}><ReferenceArtwork page="accounts" crop={PLATFORM_ART[p.key]} className="mingya-publish-platform-icon" /><span className="mingya-platform-name"><span className="mingya-checkbox" aria-hidden="true">{platforms.includes(p.key) ? '✓' : ''}</span>{p.key === 'wechat-oa' ? '微信公众号' : p.label}</span><span className="mingya-platform-status" title={pub[p.key]?.msg}>{pub[p.key]?.msg || (loginOf(p.key) ? '已登录' : '未登录')}</span></button>)}</div></section><div className="mingya-publish-right-body"><section className="mingya-publish-preview-section"><div className="mingya-preview-heading"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />预览</h2><label>切换平台：<select aria-label="切换预览平台" value={activePreview} disabled={!platforms.length} onChange={(event) => setPreviewPlatform(event.target.value)}>{!platforms.length && <option value="">未选择</option>}{PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label></div>
+<section className="mingya-publish-platforms"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />发布平台 <small>（可多选）</small></h2><div className="mingya-platform-options">{[...PLATFORMS].sort((a,b) => DISPLAY_ORDER.indexOf(a.key) - DISPLAY_ORDER.indexOf(b.key)).map((p) => <button key={p.key} type="button" className={`mingya-platform-option ${platforms.includes(p.key) ? 'selected' : ''}`} aria-pressed={platforms.includes(p.key)} onClick={() => toggle(p.key)}><ReferenceArtwork page="accounts" crop={PLATFORM_ART[p.key]} className="mingya-publish-platform-icon" /><span className="mingya-platform-name"><span className="mingya-checkbox" aria-hidden="true">{platforms.includes(p.key) ? '✓' : ''}</span>{p.key === 'wechat-oa' ? '微信公众号' : p.label}</span><span className="mingya-platform-status" title={pub[p.key]?.msg}>{pub[p.key]?.msg || (p.key === 'xiaohongshu' && !selectedMedia.some(isVideoPath) ? '登录状态由小红书页面确认' : loginOf(p.key) ? '已登录' : '未登录')}</span></button>)}</div></section><div className="mingya-publish-right-body"><section className="mingya-publish-preview-section"><div className="mingya-preview-heading"><h2><span className="mingya-publish-section-rule" aria-hidden="true" />预览</h2><label>切换平台：<select aria-label="切换预览平台" value={activePreview} disabled={!platforms.length} onChange={(event) => setPreviewPlatform(event.target.value)}>{!platforms.length && <option value="">未选择</option>}{PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></label></div>
         {platforms.length === 0 && <div className="dash-empty">选择至少一个平台查看预览</div>}
         {PLATFORMS.filter((p) => platforms.includes(p.key)).map((p) => {
           const text = effective(p.key);
@@ -402,7 +610,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
                 <span className="pv-plat">
                   {p.label}
                   {overrides[p.key] != null && <span className="pv-badge">AI 版</span>}
-                  {publishable && (logged
+                  {publishable && (p.key === 'xiaohongshu' && !selectedMedia.some(isVideoPath) ? <span className="pv-badge">登录状态由小红书页面确认</span> : logged
                     ? <span className="pv-badge pv-badge-ok">已登录</span>
                     : <span className="pv-badge">未登录</span>)}
                 </span>
@@ -453,7 +661,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
             <IconCalendar size={14} /> 存本地草稿并排期
           </button>
           <button className="btn btn-sm btn-primary" disabled={empty || publishing || checking || !canPublish}
-            title={canPublish ? hasDraftTarget ? '小红书存专用浏览器本地草稿，公众号存平台草稿，其他所选平台公开发布' : '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}
+            title={canPublish ? hasDraftTarget ? '小红书图文存当前浏览器草稿，视频走服务端；公众号存平台草稿，其他所选平台公开发布' : '真实发布到已登录平台' : '所选平台无一键发布（B站走终端 biliup）'}
             onClick={publishAll}>
             <IconPublish size={14} /> {publishing ? hasDraftTarget ? '提交中…' : '发布中…' : submitLabel}
           </button>
