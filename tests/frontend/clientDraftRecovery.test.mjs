@@ -146,3 +146,13 @@ test('popup markup provides explicit refresh and protected review controls witho
   assert.match(html, /id="review-unknown"[^>]*disabled/);
   assert.doesNotMatch(source, /innerHTML|insertAdjacentHTML/);
 });
+
+test('a not-sent hidden-render receipt stays readable and does not break recovery of an older unknown', async () => {
+  const app = harness({
+    origins: ['https://work.example'],
+    jobReceipts: [receipt({ id: 'a', updatedAt: 1000 }), receipt({ id: 'b', state: 'not_sent', action_sent: false, phase: 'visible', diagnostic: 'hidden', updatedAt: 3000 })],
+  });
+  await app.refresh();
+  assert.doesNotMatch(app.elements['receipt-status'].textContent, /无法读取/);
+  assert.equal(app.elements['review-unknown'].disabled, false);
+});

@@ -11,6 +11,8 @@ function pageStep(action, data) {
   const safe=e=>{for(let n=e;n;n=n.parentElement){const ce=n.getAttribute('contenteditable');if((ce!==null&&ce!=='false')||['INPUT','TEXTAREA'].includes(n.tagName)||n.getAttribute('role')==='textbox'||/editor|editable|preview/i.test(n.className||''))return false;}return true;};
   const all=(sel)=>[...document.querySelectorAll(sel)].filter(visible);
   if (all('.login-container,.login-modal,.login-box,.sso-login-wrapper,.qrcode-img').length) return {state:'auth'};
+  // Hidden documents skip rAF, so drawer transitions never finish; only act on a rendering page.
+  if (action==='visible') return {state:document.visibilityState==='visible'?'ok':'hidden'};
   if (action==='tab' || action==='ready') {
     const tabs=all('div.creator-tab').filter(e=>(e.innerText||'').trim()==='上传图文' && safe(e) && (()=>{const r=e.getBoundingClientRect();return r.width>0 && r.height>0 && r.left>=0 && r.top>=0 && r.right<=innerWidth && r.bottom<=innerHeight;})());
     if(tabs.length!==1)return {state:action==='ready' && tabs.length===0?'pending':'unknown'}; if(action==='ready')return {state:'ok'}; tabs[0].click(); return {state:'ok'};
@@ -192,6 +194,11 @@ export async function runXhsDraft({tabId,job,chromeApi,onProgress=()=>{},signal}
   const work=(async()=>{
     check(); const tab=await chromeApi.tabs.get(tabId);check();if(!okURL(tab?.url))return fail();
     await chromeApi.debugger.attach(target,'1.3');attached=true;check();
+    // The draft tab is opened in the background (active:false) to avoid disturbing the user. A hidden tab
+    // never runs requestAnimationFrame, so the draft drawer cannot finish closing and the baseline is lost.
+    // Focus emulation lets this background tab render without activating it; detach clears it.
+    try{await chromeApi.debugger.sendCommand(target,'Emulation.setFocusEmulationEnabled',{enabled:true});}catch{}
+    check();
     const call=async(action,data={})=>{
       phaseName=action;onProgress(action);check();const tabNow=await chromeApi.tabs.get(tabId);check();if(!okURL(tabNow?.url))throw new Error('location');
       const root=await chromeApi.debugger.sendCommand(target,'Runtime.evaluate',{expression:'document',returnByValue:false});check();
@@ -241,6 +248,20 @@ export async function runXhsDraft({tabId,job,chromeApi,onProgress=()=>{},signal}
       await new Promise(resolve=>setTimeout(resolve,250));check();
     }
     if(!pageReady)throw new Error('view');
+    const notRendering=()=>({...fail(),action_sent:false,phase:'visible',diagnostic:'hidden'});
+    const rendering=async()=>{
+      for(let i=0;i<20;i++){
+        phaseName='visible';onProgress('visible');
+        const state=await call('visible');
+        if(state==='ok'||state==='auth')return state;
+        if(state!=='hidden')throw new Error('unknown');
+        await new Promise(resolve=>setTimeout(resolve,250));check();
+      }
+      return 'hidden';
+    };
+    const renderingBefore=await rendering();
+    if(renderingBefore==='auth')return {...result('auth_required','请先在当前浏览器登录小红书。'),action_sent:false};
+    if(renderingBefore!=='ok')return notRendering();
     let localBaseline=null;
     // Draft-box baseline is an auxiliary receipt aid. A failed open must not block real save.
     if(await fresh()) {
@@ -359,6 +380,9 @@ export async function runXhsDraft({tabId,job,chromeApi,onProgress=()=>{},signal}
       }
       return uncertain();
     };
+    const renderingSave=await rendering();
+    if(renderingSave==='auth')return {...result('auth_required','请先在当前浏览器登录小红书。'),action_sent:false};
+    if(renderingSave!=='ok')return notRendering();
     try {
       await phase('baseline');onProgress('save');
       const light=await call('save_probe');

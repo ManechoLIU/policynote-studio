@@ -153,6 +153,7 @@ async function dispatch(message, sender) {
           if (typeof raw.diagnostic === 'string' && /^[a-z_]{1,32}$/.test(raw.diagnostic)) record.diagnostic=raw.diagnostic;
           if (raw.state === 'error' && raw.action_sent !== true) {
             definitelyNotSent = true;
+            if (raw.diagnostic === 'hidden') return result(false,'error','小红书页面未能在后台完成渲染，尚未执行保存，可直接重试。');
             return result(false,'error','尚未执行保存，请检查浏览器连接器中的任务状态后重试。');
           }
           if (raw.state === 'auth_required' && raw.action_sent === false) {

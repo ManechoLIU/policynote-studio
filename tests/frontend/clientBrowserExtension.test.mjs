@@ -72,6 +72,17 @@ test('saving a draft opens a background tab without taking the current tab focus
   assert.equal(app.draftCalls,1);
 });
 
+test('page that cannot render reports not sent, stays in the background and leaves no protection lock', async () => {
+  const store={origins:['https://work.example']};
+  const app=setup(async()=>({ok:false,state:'error',published:false,action_sent:false,phase:'visible',diagnostic:'hidden'}),store);
+  const payload={title:'保险清单',body:'方法科普',tags:[],images:[{name:'a.png',mime:'image/png',base64:'YQ=='}]};
+  const output=await app.send('draft',{payload});
+  assert.equal(output.state,'error');assert.equal(output.message,'小红书页面未能在后台完成渲染，尚未执行保存，可直接重试。');
+  assert.equal(app.createdTabs[0].active,false);assert.equal(app.updatedTabs.length,0);
+  assert.equal(store.jobReceipts.length,1);assert.equal(store.jobReceipts[0].state,'not_sent');
+  assert.equal(store.jobReceipts[0].action_sent,false);assert.equal(store.jobReceipts[0].diagnostic,'hidden');
+});
+
 test('draft input invalid and duplicate unknown never retried', async () => {
   const app=setup(async()=>{throw Error('PRIVATE');});
   const bad=await app.send('draft',{payload:{title:'x',body:'a',tags:[],images:[]}});

@@ -20,13 +20,14 @@ function fake(options={}) {
 test('fixed CDP commands and data arguments yield fresh notice only',async()=>{
  const f=fake();const output=await runXhsDraft({tabId:4,job:{...payload,body:'x\'); evil() //'},chromeApi:f.chromeApi});
  assert.equal(output.state,'saved');assert.equal(output.receiptKind,'fresh_notice');assert.equal(output.published,false);
- assert.deepEqual(f.stages,['ready','tab','upload','upload_state','fill','fill','fill','baseline','save_probe','save','receipt']);
+ assert.deepEqual(f.stages,['ready','visible','tab','upload','upload_state','fill','fill','fill','visible','baseline','save_probe','save','receipt']);
  assert.deepEqual(f.counts(),{attached:1,detached:1});
  const fill=f.calls.find(c=>c.args.arguments?.[0]?.value==='fill');
  assert.equal(fill.args.arguments[1].value.body,"x'); evil() // #保险");
  assert.equal(fill.args.functionDeclaration.includes("x'); evil()"),false);
  assert.deepEqual(f.calls.filter(c=>c.method==='Input.insertText').map(c=>c.args.text),['标题',"x'); evil() // #保险"]);
- assert.ok(f.calls.every(c=>['Runtime.evaluate','Runtime.callFunctionOn','DOM.getDocument','Input.insertText'].includes(c.method)));
+ assert.ok(f.calls.every(c=>['Emulation.setFocusEmulationEnabled','Runtime.evaluate','Runtime.callFunctionOn','DOM.getDocument','Input.insertText'].includes(c.method)));
+ assert.equal(f.calls[0].method,'Emulation.setFocusEmulationEnabled');assert.deepEqual(f.calls[0].args,{enabled:true});
 });
 test('bad origin and invalid or oversized data stop before attach',async()=>{
  const f=fake({url:'https://evil.example/publish/publish'});assert.equal((await runXhsDraft({tabId:1,job:payload,chromeApi:f.chromeApi})).state,'error');assert.equal(f.counts().attached,0);
@@ -309,7 +310,7 @@ test('image tab ignores aria-hidden, transparent and off-viewport copies', async
 test('waits for SPA readiness before attempting upload or save',async()=>{
  let reads=0;const f=fake({states:{ready:()=>++reads<3?'pending':'ok'}});
  assert.equal((await runXhsDraft({tabId:1,job:payload,chromeApi:f.chromeApi})).state,'saved');
- assert.deepEqual(f.stages.slice(0,4),['ready','ready','ready','tab']);assert.equal(f.stages.filter(x=>x==='save').length,1);
+ assert.deepEqual(f.stages.slice(0,5),['ready','ready','ready','visible','tab']);assert.equal(f.stages.filter(x=>x==='save').length,1);
 });
 
 
@@ -533,4 +534,82 @@ test('semantic drawer click revalidates identity, ancestors and blocking overlay
  const blockedTab=harness('tab');blockedTab.state.blockers=[blockedTab.make('DIV','creator-publish-popover')];assert.equal(blockedTab.run(),false);assert.equal(blockedTab.clicks(),0);
  const nestedDialog=harness('tab'),nested=nestedDialog.make('DIV','creator-publish-popover',nestedDialog.content);nested.attrs.role='dialog';nestedDialog.tab.parentElement=nested;nestedDialog.state.blockers=[nested];assert.equal(nestedDialog.run(),false);assert.equal(nestedDialog.clicks(),0);
  const wrongAction=harness('publish');assert.equal(wrongAction.run(),false);assert.equal(wrongAction.clicks(),0);
+});
+
+// Real-browser evidence (claude-probe 2026-11-06): a background tab (active:false) is hidden, rAF never fires,
+// the draft drawer opens and is readable but its close transition never finishes, so the opener never returns.
+// Emulation.setFocusEmulationEnabled makes the same background tab render (visible, rAF, close restores, covers load).
+function renderFake(options={}) {
+ let rendering=false, saved=false, view='closed', fills=0;
+ const calls=[], stages=[], views=[];
+ const chromeApi={tabs:{get:async()=>({url:'https://creator.xiaohongshu.com/publish/publish'})},debugger:{attach:async()=>{},detach:async()=>{},sendCommand:async(_,method,args)=>{
+  calls.push({method,args,saved});
+  if(method==='Emulation.setFocusEmulationEnabled'){if(options.emulation==='reject')throw new Error('not allowed');rendering=args.enabled===true;return {};}
+  if(method==='Input.insertText')return {};
+  if(method==='Runtime.evaluate')return {result:{objectId:'doc'}};
+  if(method==='DOM.getDocument')return {root:{nodeType:9,nodeName:'#document',documentURL:'https://creator.xiaohongshu.com/publish/publish',children:[]}};
+  const fn=args.functionDeclaration;
+  if(fn.startsWith('function(action){if(')){
+   const action=args.arguments[0].value;views.push({action,saved,rendering});
+   view=action==='open'?'tab':action==='tab'?'rows':rendering?'closed':'closing';
+   return {result:{value:true}};
+  }
+  if(fn.startsWith('function(){return ('))return {result:{value:view==='closed'||view==='closing'}};
+  if(fn.startsWith('function(action){return (')){
+   const action=args.arguments[0].value;
+   const available=action==='open'?view==='closed':view==='tab'||view==='rows'||(action==='close'&&view==='closing');
+   return {result:available?{objectId:'view-'+action}:{subtype:'null'}};
+  }
+  if(fn.startsWith('function(target){return (')){
+   if(view!=='rows')return {result:{value:{pending:true}}};
+   return {result:{value:{ok:true,count:saved?11:10,match:saved?{title:'标题',saved_at:'2026-11-05 22:52:40',images:[{loaded:rendering,natural_width:1080,natural_height:1440}]}:null}}};
+  }
+  const stage=args.arguments[0].value;stages.push(stage);
+  if(stage==='visible')return {result:{value:{state:rendering?'ok':'hidden'}}};
+  if(stage==='fill'&&++fills===3&&options.lostBeforeSave)rendering=false;
+  if(stage==='save'){saved=true;view='closed';}
+  return {result:{value:{state:stage==='save_probe'?'one':stage==='receipt'?'unknown':'ok'}}};
+ }}};
+ return {chromeApi,calls,stages,views};
+}
+async function runRenderCase(t, options={}) {
+ t.mock.timers.enable({apis:['Date','setTimeout'],now:Date.parse('2026-11-05T14:52:40Z')});
+ const f=renderFake(options);let done=false,output,error;
+ const pending=runXhsDraft({tabId:1,job:payload,chromeApi:f.chromeApi}).then(value=>{output=value;done=true;},value=>{error=value;done=true;});
+ for(let i=0;i<400&&!done;i++){await new Promise(resolve=>setImmediate(resolve));t.mock.timers.tick(250);}
+ assert.equal(done,true,'adapter must finish within its bound');await pending;if(error)throw error;
+ return {f,output};
+}
+test('background tab renders via focus emulation so the verified baseline survives drawer close',async t=>{
+ const {f,output}=await runRenderCase(t);
+ const emulation=f.calls.findIndex(c=>c.method==='Emulation.setFocusEmulationEnabled');
+ const firstPage=f.calls.findIndex(c=>c.method==='Runtime.callFunctionOn');
+ assert.ok(emulation>=0 && emulation<firstPage,'emulation must precede every page step');
+ assert.deepEqual(f.calls[emulation].args,{enabled:true});
+ assert.deepEqual(f.views.filter(v=>!v.saved).map(v=>[v.action,v.rendering]),[['open',true],['tab',true],['close',true]]);
+ assert.equal(output.state,'record_found');assert.equal(output.receiptKind,'new_record');assert.equal(output.published,false);
+ assert.equal(f.stages.filter(s=>s==='save').length,1);
+});
+test('page that cannot render stops before upload, fill or save and reports not sent',async t=>{
+ const {f,output}=await runRenderCase(t,{emulation:'reject'});
+ assert.equal(output.state,'error');assert.equal(output.action_sent,false);
+ assert.equal(output.phase,'visible');assert.equal(output.diagnostic,'hidden');
+ for(const stage of ['tab','upload','fill','baseline','save_probe','save'])assert.equal(f.stages.includes(stage),false,stage);
+ assert.equal(f.calls.some(c=>c.method==='Input.insertText'),false);
+ assert.equal(f.views.length,0);
+});
+test('rendering lost before the save click never sends save',async t=>{
+ const {f,output}=await runRenderCase(t,{lostBeforeSave:true});
+ assert.equal(output.state,'error');assert.equal(output.action_sent,false);assert.equal(output.diagnostic,'hidden');
+ assert.equal(f.stages.includes('save'),false);assert.equal(f.stages.includes('save_probe'),false);
+});
+test('actual page visible step reports rendering state and keeps login precedence',async t=>{
+ const {f}=await runRenderCase(t);
+ const code=f.calls.find(c=>c.args?.arguments?.[0]?.value==='visible').args.functionDeclaration;
+ const document={visibilityState:'hidden',login:[],querySelectorAll(sel){return sel.includes('.login-container')?this.login:[]}};
+ const run=runInNewContext(`(${code})`,{document,window:{},location:{origin:'https://creator.xiaohongshu.com',pathname:'/publish/publish'},getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'})});
+ assert.equal(run('visible',{}).state,'hidden');
+ document.visibilityState='prerender';assert.equal(run('visible',{}).state,'hidden');
+ document.visibilityState='visible';assert.equal(run('visible',{}).state,'ok');
+ document.login=[{isConnected:true,hidden:false,parentElement:null,getClientRects:()=>[{}],getAttribute:()=>null}];assert.equal(run('visible',{}).state,'auth');
 });

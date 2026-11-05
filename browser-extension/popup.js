@@ -19,7 +19,7 @@ const RECEIPT_PHASES = {
   attach: '连接页面', view_open: '打开草稿箱', view_tab: '切换草稿标签', view_close: '关闭草稿箱',
   ready: '准备任务', tab: '切换发布类型', upload: '上传图片', upload_state: '检查上传状态',
   fill: '填写内容', baseline: '记录草稿基线', save_probe: '检查保存入口', save: '触发保存', confirm: '确认保存',
-  receipt: '核对保存结果', task: '浏览器任务',
+  receipt: '核对保存结果', task: '浏览器任务', visible: '检查页面渲染',
 };
 const RECEIPT_DIAGNOSTICS = {
   location: '页面地址不匹配', document: '页面文档已变化', page: '页面状态不符合预期', view: '草稿箱状态未确认',
@@ -28,6 +28,7 @@ const RECEIPT_DIAGNOSTICS = {
   ambiguous: '页面存在多个候选', stopped: '任务已停止', browser_error: '浏览器操作未确认',
   adapter_unconfirmed: '适配器结果未确认', tab_url: '发布页地址未确认', tab_create: '创建发布页失败',
   tab_wait: '发布页加载未完成', tab_closed: '发布页已关闭', task_throw: '浏览器任务异常',
+  hidden: '后台页面未渲染',
 };
 
 function isReceipt(row) {
