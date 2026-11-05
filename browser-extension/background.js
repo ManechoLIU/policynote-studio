@@ -22,6 +22,18 @@ function validJob(p) {
   }
   return total <= 30 * 1024 * 1024;
 }
+function receiptCheckMessage(raw) {
+  const check = raw?.receiptCheck;
+  const labels = {no_baseline:'未取得保存前的草稿数量',view:'草稿列表尚未读取完成',count:'保存前后的草稿数量未能对应',target:'未找到唯一对应记录',time:'记录保存时间未能对应',image:'记录封面尚未读取完成',navigation:'核对页面状态未确认',timeout:'核对等待已结束'};
+  const validCount = value => value === null || (Number.isSafeInteger(value) && value >= 0 && value <= 10000);
+  if (raw?.state !== 'unconfirmed' || !check || typeof check !== 'object' || Array.isArray(check)
+      || Object.keys(check).length !== 3 || !Object.hasOwn(check,'reason') || !Object.hasOwn(labels,check.reason)
+      || !Object.hasOwn(check,'baselineCount') || !Object.hasOwn(check,'observedCount')
+      || !validCount(check.baselineCount) || !validCount(check.observedCount)) return null;
+  const before = check.baselineCount === null ? '未知' : check.baselineCount;
+  const after = check.observedCount === null ? '未知' : check.observedCount;
+  return `保存结果未确认：${labels[check.reason]}（保存前${before}篇，当前${after}篇）。请先查看草稿箱，勿重复提交。`;
+}
 async function waitComplete(tabId, signal) {
   const tab = await chrome.tabs.get(tabId);
   if (tab.status === 'complete') return true;
@@ -148,7 +160,8 @@ async function dispatch(message, sender) {
             return result(false,'auth_required','请先在当前浏览器登录小红书。');
           }
           if (!record.diagnostic) record.diagnostic='adapter_unconfirmed';
-          return unknown();
+          const detail = receiptCheckMessage(raw);
+          return detail ? result(false,'unconfirmed',detail) : unknown();
         })();
         const output = await Promise.race([execute, closed]);
         if (controller.signal.aborted) await execute.catch(() => {});

@@ -198,22 +198,24 @@ test('closed drawer after baseline cannot be treated as a new-record save receip
  assert.equal(f.getCount(),3);assert.equal(f.calls.filter(c=>c.method==='Input.dispatchMouseEvent').length,0);
  assert.equal(f.calls.filter(c=>c.args?.arguments?.[0]?.value==='save').length,1);
 });
-test('pointer hit mismatch on optional draft-box open skips baseline and still saves',async()=>{
+test('read-only drawer navigation does not depend on pointer hit testing',async()=>{
  const f=viewFake({badHit:true});const r=await runXhsDraft({tabId:1,job:payload,chromeApi:f.chromeApi});
- assert.equal(f.getCount(),0);
+ assert.equal(f.getCount(),3);
+ assert.equal(f.calls.some(c=>['DOM.getContentQuads','DOM.getNodeForLocation'].includes(c.method)),false);
  assert.equal(f.calls.filter(c=>c.method==='Input.dispatchMouseEvent').length,0);
  assert.equal(f.calls.some(c=>c.args?.arguments?.[0]?.value==='upload'),true);
  assert.equal(f.calls.filter(c=>c.args?.arguments?.[0]?.value==='save').length,1);
  assert.equal(r.action_sent,undefined);
  assert.notEqual(r.phase,'view_tab');
 });
-test('off-viewport draft-box open (view_open/viewport) soft-skips baseline and still saves once',async()=>{
+test('read-only drawer navigation preserves baseline outside the viewport',async()=>{
  const f=viewFake({offscreen:true});const r=await runXhsDraft({tabId:1,job:payload,chromeApi:f.chromeApi});
- assert.equal(f.getCount(),0);
+ assert.equal(f.getCount(),3);
+ assert.equal(f.calls.some(c=>['DOM.getContentQuads','DOM.getNodeForLocation'].includes(c.method)),false);
  assert.equal(f.calls.some(c=>c.args?.arguments?.[0]?.value==='upload'),true);
  assert.equal(f.calls.filter(c=>c.args?.arguments?.[0]?.value==='save').length,1);
  assert.notEqual(r.phase,'view_open');assert.notEqual(r.diagnostic,'viewport');
- // receipt gate stays strict: fake receipt never confirms, so no saved/record_found without baseline.
+ // The fake still supplies no fresh receipt or valid new-record evidence.
  assert.notEqual(r.state,'saved');assert.notEqual(r.state,'record_found');
 });
 test('open click without drawer effect soft-skips baseline and still reaches save',async()=>{
@@ -400,7 +402,7 @@ test('title preview that never converges reaches no save action', async t=>{
 });
 
 function recoveryFake(options={}) {
- let saved=false, view='closed', delayed=0, interrupted=false, postSaveReads=0, redundantHits=0;
+ let saved=false, view='closed', delayed=0, interrupted=false, postSaveReads=0, redundantHits=0, baselineHitFailed=false, closeReceiptLost=false;
  const calls=[], stages=[], views=[];
  const chromeApi={tabs:{get:async()=>({url:saved&&options.crossOrigin?'https://other.example/publish/publish':'https://creator.xiaohongshu.com/publish/publish?from=tab_switch'})},debugger:{attach:async()=>{},detach:async()=>{},sendCommand:async(_,method,args)=>{
   calls.push({method,args,saved});
@@ -410,6 +412,7 @@ function recoveryFake(options={}) {
   if(method==='DOM.describeNode')return {node:{backendNodeId:42}};
   if(method==='DOM.getContentQuads')return {quads:[[10,10,30,10,30,30,10,30]]};
   if(method==='DOM.getNodeForLocation'){
+   if(!saved&&!baselineHitFailed&&((options.baselineHit==='open'&&view==='closed')||(options.baselineHit==='close'&&view==='rows'))){baselineHitFailed=true;throw new Error('hit');}
    if(saved&&view==='rows'&&options.tabHitFails){redundantHits++;throw new Error('hit');}
    return {backendNodeId:42};
   }
@@ -418,6 +421,7 @@ function recoveryFake(options={}) {
   if(fn.startsWith('function(action){if(')){
    const action=args.arguments[0].value;views.push({action,saved});
    view=action==='open'?(options.activeOnOpen?'rows':'tab'):action==='tab'?'rows':'closed';
+   if(!saved&&action==='close'&&options.closeReceiptLost&&!closeReceiptLost){closeReceiptLost=true;return {result:{value:false}};}
    return {result:{value:true}};
   }
   if(fn.startsWith('function(){return ('))return {result:{value:saved||!options.noBaseline}};
@@ -476,4 +480,57 @@ for(const invalid of [{stale:true},{noGrowth:true}])test(`active image list neve
  const {f,output}=await runRecoveryCase(t,{activeOnOpen:true,tabHitFails:true,targetDelay:1,...invalid});
  assert.equal(output.state,'unconfirmed');assert.equal(f.getRedundantHits(),0);
  assert.deepEqual(f.views.filter(item=>item.saved).map(item=>item.action),['open']);
+});
+for(const [options,expected] of [
+ [{noBaseline:true},{baselineCount:null,observedCount:null,reason:'no_baseline'}],
+ [{noEntry:true},{baselineCount:10,observedCount:null,reason:'view'}],
+ [{noGrowth:true},{baselineCount:10,observedCount:10,reason:'count'}],
+ [{targetDelay:100},{baselineCount:10,observedCount:11,reason:'target'}],
+ [{stale:true},{baselineCount:10,observedCount:11,reason:'time'}],
+ [{unloaded:true},{baselineCount:10,observedCount:11,reason:'image'}],
+])test(`receipt diagnostics report only counts and the failed ${expected.reason} gate`,async t=>{
+ const {output}=await runRecoveryCase(t,options);
+ assert.equal(output.state,'unconfirmed');assert.deepEqual(output.receiptCheck,expected);
+ assert.deepEqual(Object.keys(output.receiptCheck).sort(),['baselineCount','observedCount','reason']);
+ assert.doesNotMatch(JSON.stringify(output.receiptCheck),/标题|正文|AQID|https?:|saved_at|1080|1440/);
+});
+for(const options of [{baselineHit:'open'},{baselineHit:'close'},{closeReceiptLost:true}])test(`read-only drawer navigation preserves a verified baseline ${JSON.stringify(options)}`,async t=>{
+ const {f,output}=await runRecoveryCase(t,options);
+ assert.equal(output.state,'record_found');assert.equal(output.receiptKind,'new_record');
+ assert.deepEqual(f.views.filter(item=>!item.saved).map(item=>item.action),['open','tab','close']);
+ assert.equal(f.calls.some(call=>['DOM.getContentQuads','DOM.getNodeForLocation'].includes(call.method)),false);
+});
+test('semantic drawer click revalidates identity, ancestors and blocking overlays atomically',async t=>{
+ const {f}=await runRecoveryCase(t);
+ const code=f.calls.find(call=>call.args?.functionDeclaration?.startsWith('function(action){if(')).args.functionDeclaration;
+ function harness(action='open'){
+  let clicks=0;
+  const make=(tagName,className='',parentElement=null,textContent='')=>({tagName,className,parentElement,textContent,isConnected:true,hidden:false,disabled:false,attrs:{},queries:{},
+   getClientRects(){return [{}]},getAttribute(key){return this.attrs[key]??null},hasAttribute(key){return Object.hasOwn(this.attrs,key)},
+   querySelectorAll(selector){return this.queries[selector]||[]},contains(other){for(let n=other;n;n=n.parentElement)if(n===this)return true;return false;},
+   closest(){for(let n=this;n;n=n.parentElement)if(n.className.split(' ').includes('draft-drawer'))return n;return null;},
+   get classList(){return {contains:value=>this.className.split(' ').includes(value)}}});
+  const header=make('DIV','header-draft'),label=make('SPAN','draft-title',header,'草稿箱(10)');
+  header.queries[':scope > div.draft-title-box > span.draft-title']=[label];
+  const drawer=make('DIV','d-drawer d-drawer-right draft-drawer'),content=make('DIV','d-drawer-content',drawer),tab=make('DIV','tab-item active',content),tabLabel=make('SPAN','tab-item-text',tab,'图文笔记(10)'),close=make('SPAN','d-drawer-close d-clickable',drawer);
+  drawer.queries[':scope > div.d-drawer-content']=[content];drawer.queries['span.d-drawer-close.d-clickable']=[close];content.queries['span.tab-item-text']=[tabLabel];
+  const state={headers:[header],drawers:action==='open'?[]:[drawer],blockers:[]};
+  const document={querySelectorAll(selector){if(selector==='div.header > div.header-draft')return state.headers;if(selector==='div.d-drawer.d-drawer-right.draft-drawer')return state.drawers;if(selector.includes('.login-container'))return state.blockers;return [];}};
+  const location={origin:'https://creator.xiaohongshu.com',pathname:'/publish/publish'};
+  const run=runInNewContext('('+code+')',{document,location,getComputedStyle:()=>({display:'block',visibility:'visible',opacity:'1'}),HTMLElement:{prototype:{click(){clicks++}}}});
+  const target=action==='open'?label:action==='tab'?tabLabel:close;
+  return {header,label,drawer,content,tab,state,location,make,run:()=>run.call(target,action),clicks:()=>clicks};
+ }
+ for(const action of ['open','tab','close']){const app=harness(action);assert.equal(app.run(),true);assert.equal(app.clicks(),1);}
+ for(const mutate of [
+  app=>{app.label.isConnected=false;},app=>{app.label.disabled=true;},app=>{app.header.attrs.disabled='';},
+  app=>{app.header.attrs.inert='';},app=>{app.header.attrs['aria-hidden']='true';},app=>{app.header.attrs['aria-disabled']='true';},
+  app=>{app.header.className='editor';},app=>{app.state.headers.push(app.header);},
+  app=>{app.state.blockers=[app.make('DIV','login-modal')];},app=>{app.state.blockers=[app.make('DIV','creator-publish-popover')];},
+  app=>{app.location.origin='https://other.example';},app=>{app.location.pathname='/other';},
+ ]){const app=harness();mutate(app);assert.equal(app.run(),false);assert.equal(app.clicks(),0);}
+ const ownDialog=harness('tab');ownDialog.drawer.attrs.role='dialog';ownDialog.state.blockers=[ownDialog.drawer];assert.equal(ownDialog.run(),true);
+ const blockedTab=harness('tab');blockedTab.state.blockers=[blockedTab.make('DIV','creator-publish-popover')];assert.equal(blockedTab.run(),false);assert.equal(blockedTab.clicks(),0);
+ const nestedDialog=harness('tab'),nested=nestedDialog.make('DIV','creator-publish-popover',nestedDialog.content);nested.attrs.role='dialog';nestedDialog.tab.parentElement=nested;nestedDialog.state.blockers=[nested];assert.equal(nestedDialog.run(),false);assert.equal(nestedDialog.clicks(),0);
+ const wrongAction=harness('publish');assert.equal(wrongAction.run(),false);assert.equal(wrongAction.clicks(),0);
 });

@@ -444,3 +444,13 @@ test('image total limit is checked as each stream arrives', async () => {
   assert.equal(app.clientCalls.filter(c=>c[0]==='draft').length,0);
   assert.equal(app.fetchCalls.length,4);
 });
+
+
+test('unconfirmed receipt diagnosis remains a failure and is visible without retry', async () => {
+ const message='保存结果未确认：记录封面尚未读取完成（保存前12篇，当前13篇）。请先查看草稿箱，勿重复提交。';
+ const app=page({save:async()=>({ok:false,state:'unconfirmed',message,published:false})});
+ await submit(await chooseImage(app)).props.onClick();
+ const rendered=card(app.render(),'xiaohongshu');
+ assert.match(rendered.props.className,/pv-pubstate fail/);assert.match(text(rendered),/保存前12篇，当前13篇/);
+ assert.equal(app.clientCalls.filter(call=>call[0]==='draft').length,1);
+});

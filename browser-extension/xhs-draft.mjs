@@ -214,22 +214,17 @@ export async function runXhsDraft({tabId,job,chromeApi,onProgress=()=>{},signal}
       try{obj=await findView(action);}catch(error){return soft(error);}
       if(!obj?.objectId)return soft(new Error('view'));
       const id=obj.objectId;
-      const describe=async()=>{const r=await command('DOM.describeNode',{objectId:id,depth:0,pierce:true});if(!Number.isInteger(r?.node?.backendNodeId))throw new Error('identity');return r.node.backendNodeId;};
-      const valid=async()=>{const r=await command('Runtime.callFunctionOn',{objectId:id,functionDeclaration:'function(action){return ('+FIND_VIEW+')(action)===this && !this.disabled && this.getAttribute("aria-disabled")!=="true" && !this.closest("[inert]")}',arguments:[{value:action}],returnByValue:true});return r?.result?.value===true;};
-      const quad=async()=>{const q=(await command('DOM.getContentQuads',{objectId:id}))?.quads;if(!Array.isArray(q)||q.length!==1||q[0].length!==8||q[0].some(n=>!Number.isFinite(n)))throw new Error('box');return q[0];};
       try{
-        const backend=await describe();if(!await valid())throw new Error('view');const box=await quad();
-        const x=Math.floor((box[0]+box[2]+box[4]+box[6])/4),y=Math.floor((box[1]+box[3]+box[5]+box[7])/4);
-        const dims=(await evaluate('function(){return {width:innerWidth,height:innerHeight}}'))?.value;
-        if(!dims||x<0||y<0||x>=dims.width||y>=dims.height)throw new Error('viewport');
-        const hit=await command('DOM.getNodeForLocation',{x,y,includeUserAgentShadowDOM:true,ignorePointerEventsNone:false});
-        if(!Number.isInteger(hit?.backendNodeId))throw new Error('hit');
-        const hitId=(await command('DOM.resolveNode',{backendNodeId:hit.backendNodeId}))?.object?.objectId;if(!hitId)throw new Error('hit');
-        const contains=await command('Runtime.callFunctionOn',{objectId:id,functionDeclaration:'function(hit){return this===hit || this.contains(hit)}',arguments:[{objectId:hitId}],returnByValue:true});
-        if(contains?.result?.value!==true||backend!==await describe()||!await valid()||JSON.stringify(box)!==JSON.stringify(await quad()))throw new Error('changed');
-        // Single semantic click on the validated control (span.draft-title / tab text / close).
-        // Baseline callers must verify the drawer effect; a no-op click is soft-skipped there.
-        const clicked=await command('Runtime.callFunctionOn',{objectId:id,functionDeclaration:'function(action){if(('+FIND_VIEW+')(action)!==this)return false;HTMLElement.prototype.click.call(this);return true;}',arguments:[{value:action}],returnByValue:true});
+        // Read-only drawer controls use semantic identity, not background-tab hit coordinates.
+        // Revalidate and click in one synchronous call; callers still verify the resulting view.
+        const clicked=await command('Runtime.callFunctionOn',{objectId:id,functionDeclaration:`function(action){if(!['open','tab','close'].includes(action)||!this.isConnected||(${FIND_VIEW})(action)!==this)return false;
+          for(let n=this;n;n=n.parentElement){if(n.disabled||n.hasAttribute('disabled')||n.hasAttribute('inert')||n.getAttribute('aria-disabled')==='true'||n.getAttribute('aria-hidden')==='true')return false;}
+          const visible=e=>!!e.isConnected&&!!e.getClientRects().length&&(()=>{for(let n=e;n;n=n.parentElement){const s=getComputedStyle(n);if(n.hidden||n.getAttribute('aria-hidden')==='true'||s.display==='none'||s.visibility!=='visible'||Number(s.opacity)===0)return false;}return true;})();
+          const drawer=this.closest('div.d-drawer.d-drawer-right.draft-drawer');
+          const blockers=[...document.querySelectorAll('.login-container,.login-modal,.login-box,.sso-login-wrapper,.qrcode-img,div.creator-publish-popover,[role="dialog"]')];
+          if(blockers.some(e=>visible(e)&&!(e===drawer&&e.getAttribute('role')==='dialog')))return false;
+          HTMLElement.prototype.click.call(this);return true;
+        }`,arguments:[{value:action}],returnByValue:true});
         if(clicked?.exceptionDetails || clicked?.result?.value!==true)throw new Error('view');
         return true;
       }catch(error){return soft(error);}
@@ -276,7 +271,7 @@ export async function runXhsDraft({tabId,job,chromeApi,onProgress=()=>{},signal}
             if(!(await fresh()) && !softGeom) throw (error instanceof Error ? error : new Error('view'));
             localBaseline=null;
           } else {
-            localBaseline=null;
+            localBaseline=softGeom?captured:null;
           }
         }
       }
@@ -317,42 +312,52 @@ export async function runXhsDraft({tabId,job,chromeApi,onProgress=()=>{},signal}
       await command('Input.insertText',{text:part==='title'?job.title:body});
     }
     if(!await fillPart('verify'))return {...result('auth_required','请先在当前浏览器登录小红书。'),action_sent:false};
-    const matchRecord=snapshot=>{
-      if(!snapshot?.ok || snapshot.match?.title!==job.title) return false;
-      if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(snapshot.match?.saved_at||'')) return false;
+    const recordFailure=snapshot=>{
+      if(!snapshot?.ok) return 'view';
+      if(snapshot.match?.title!==job.title) return 'target';
+      if(!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(snapshot.match?.saved_at||'')) return 'time';
       const imgs=snapshot.match.images;
-      if(!Array.isArray(imgs) || imgs.length<1 || !imgs.some(im=>im && im.loaded===true && im.natural_width>0 && im.natural_height>0)) return false;
-      if(localBaseline===null || snapshot.count!==localBaseline+1) return false;
+      if(!Array.isArray(imgs) || imgs.length<1 || !imgs.some(im=>im && im.loaded===true && im.natural_width>0 && im.natural_height>0)) return 'image';
+      if(localBaseline===null) return 'no_baseline';
+      if(snapshot.count!==localBaseline+1) return 'count';
       const m=snapshot.match.saved_at.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
-      if(!m) return false;
+      if(!m) return 'time';
       // saved_at is creator-local Asia/Shanghai (UTC+8).
       const savedMs=Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+m[6])-8*3600*1000;
-      if(savedMs<startedAt-120000 || savedMs>Date.now()+120000) return false;
-      return true;
+      if(savedMs<startedAt-120000 || savedMs>Date.now()+120000) return 'time';
+      return null;
     };
+    const matchRecord=snapshot=>recordFailure(snapshot)===null;
     const recordFound=()=>result('record_found','草稿箱出现新增记录，请核对正文和图片。','new_record');
     const contextChanged=error=>['document','page'].includes(error?.message) || /execution context|cannot find context|cannot find object|inspected target navigated/i.test(error?.message||'');
     const recoverRecord=async()=>{
-      if(!sent || localBaseline===null)return unknown();
+      let lastSnapshot=null, lastFailure='view';
+      const uncertain=(reason=stopped||signal?.aborted?'timeout':lastFailure)=>({...unknown(),receiptCheck:{
+        baselineCount:Number.isSafeInteger(localBaseline)&&localBaseline>=0?localBaseline:null,
+        observedCount:Number.isSafeInteger(lastSnapshot?.count)&&lastSnapshot.count>=0?lastSnapshot.count:null,
+        reason,
+      }});
+      if(!sent || localBaseline===null)return uncertain(localBaseline===null?'no_baseline':'view');
       let opened=false, selected=false;
       // Saving can replace the document and its notice marker. Inspect only; never send save again.
       for(let i=0;i<40;i++){
-        if(stopped || signal?.aborted)return unknown();
+        if(stopped || signal?.aborted)return uncertain('timeout');
         try {
           phaseName='receipt';onProgress('receipt');
           const current=await chromeApi.tabs.get(tabId);check();
-          if(!okURL(current?.url))return unknown();
+          if(!okURL(current?.url))return uncertain('navigation');
           const snapshot=await readView();
-          if(matchRecord(snapshot))return recordFound();
+          lastSnapshot=snapshot;lastFailure=recordFailure(snapshot);
+          if(lastFailure===null)return recordFound();
           if(!snapshot?.ok && !opened && await fresh() && (await findView('open'))?.objectId){
-            opened=true;if(!await pointerView('open',true))return unknown();
+            opened=true;if(!await pointerView('open',true))return uncertain();
           } else if(!snapshot?.ok && !selected && (await findView('tab'))?.objectId){
-            selected=true;if(!await pointerView('tab',true))return unknown();
+            selected=true;if(!await pointerView('tab',true))return uncertain();
           }
-        } catch(error) {if(!contextChanged(error))return unknown();}
+        } catch(error) {if(!contextChanged(error))return uncertain(error?.message==='location'?'navigation':undefined);}
         await new Promise(resolve=>setTimeout(resolve,250));
       }
-      return unknown();
+      return uncertain();
     };
     try {
       await phase('baseline');onProgress('save');

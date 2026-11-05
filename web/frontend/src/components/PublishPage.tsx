@@ -126,7 +126,7 @@ function clientDraftMessage(result: ClientBrowserResult): { status: 'ok' | 'fail
   if (result.published !== false) return { status: 'fail', msg: '未确认保存至小红书草稿。请先查看小红书草稿，勿重复提交。' };
   if (result.ok && result.state === 'saved') return { status: 'ok', msg: '已保存至当前浏览器的小红书草稿，未公开发布。这是本次新草稿。' };
   if (result.ok && result.state === 'record_found') return { status: 'ok', msg: '草稿箱已核对到本次新增记录；请打开检查正文和图片。未公开发布。' };
-  if (result.state === 'unconfirmed') return { status: 'fail', msg: '保存结果未确认。请先查看小红书草稿，勿重复提交。' };
+  if (result.state === 'unconfirmed') return { status: 'fail', msg: result.message.startsWith('保存结果未确认：') && result.message.includes('勿重复提交') ? result.message : '保存结果未确认。请先查看小红书草稿，勿重复提交。' };
   if (result.state === 'auth_required') return { status: 'fail', msg: result.message.trim() || '请在当前浏览器打开的小红书创作者页面登录后再保存草稿。' };
   if (result.state === 'unavailable') return { status: 'fail', msg: result.message.trim() || CLIENT_MISSING };
   return { status: 'fail', msg: result.message.trim() || '保存小红书草稿失败。请先查看小红书草稿，勿重复提交。' };

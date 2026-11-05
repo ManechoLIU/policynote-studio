@@ -360,3 +360,27 @@ test('workbench review rejects changed snapshots, child frames and unbound origi
   assert.equal((await app.send('review',{payload:{reviewToken:id}})).ok,false);
   assert.equal(app.creates,0);assert.equal(app.draftCalls,0);
 });
+
+
+test('unconfirmed receipt diagnosis exposes only bounded counts and fixed reasons', async () => {
+ const payload={title:'x',body:'a',tags:[],images:[{name:'a',mime:'image/png',base64:'YQ=='}]};
+ const store={origins:['https://work.example']};
+ const app=setup(async()=>({ok:false,state:'unconfirmed',published:false,message:'PRIVATE',receiptCheck:{baselineCount:12,observedCount:13,reason:'image'}}),store);
+ const output=await app.send('draft',{payload});
+ assert.equal(output.state,'unconfirmed');assert.equal(output.ok,false);assert.equal(output.published,false);
+ assert.match(output.message,/记录封面尚未读取完成/);assert.match(output.message,/保存前12篇，当前13篇/);
+ assert.doesNotMatch(JSON.stringify(output),/PRIVATE/);assert.equal(store.jobReceipts[0].state,'unknown');
+ assert.equal((await app.send('draft',{id:'123e4567-e89b-42d3-a456-426614174004',payload})).state,'busy');
+ assert.equal(app.draftCalls,1);
+ for(const receiptCheck of [
+  {baselineCount:-1,observedCount:13,reason:'image'},
+  {baselineCount:12,observedCount:'PRIVATE',reason:'count'},
+  {baselineCount:12,observedCount:13,reason:'PRIVATE'},
+  {baselineCount:12,observedCount:13,reason:'image',title:'PRIVATE'},
+  {baselineCount:12,observedCount:10001,reason:'count'},
+ ]){
+  const invalid=setup(async()=>({ok:false,state:'unconfirmed',published:false,message:'PRIVATE',receiptCheck}));
+  const result=await invalid.send('draft',{payload});assert.equal(result.state,'unconfirmed');
+  assert.doesNotMatch(result.message,/PRIVATE|保存前/);
+ }
+});
