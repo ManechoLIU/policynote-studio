@@ -206,7 +206,7 @@ function page(options = {}) {
   const confirmations = [];
   runInNewContext(transpile('../../web/frontend/src/components/PublishPage.tsx'), {
     exports, Error, require: name => modules[name],
-    window: { confirm(message) { confirmations.push(message); return options.confirm !== false; } },
+    window: { confirm(message) { confirmations.push(message); return typeof options.confirm === 'function' ? options.confirm(message) : options.confirm !== false; } },
     location: { origin: 'https://workbench.example' },
     fetch: async (url, init) => {
       fetchCalls.push({ url, credentials: init?.credentials, redirect: init?.redirect });
@@ -275,43 +275,83 @@ test('connect and open use the current browser once per gesture and never the se
   assert.equal(app.clientCalls.some(call => call[0] === 'open'), true);
 });
 
-test('manual review prepares, confirms exact warning, and commits once', async () => {
-  const app=page();const initial=app.render();
-  assert.equal(button(initial,'核对后解除保护').props.className,'btn btn-sm');
-  await button(initial,'核对后解除保护').props.onClick();
+const unknownSave = async () => ({ ok: false, state: 'unconfirmed', message: '保存结果未确认：未取得保存前的草稿数量（保存前未知篇，当前未知篇）。请先查看草稿箱，勿重复提交。', published: false });
+async function reviewNeeded(options = {}) {
+  const app = page({ save: unknownSave, ...options });
+  await submit(await chooseImage(app)).props.onClick();
+  return app;
+}
+const reviewButton = tree => nodes(tree).find(node => node.type === 'button' && /我已核对|正在解除保护/.test(text(node)));
+
+test('the review control is hidden until a draft result is unknown or blocked by protection', async () => {
+  const app = page();
+  const initial = app.render();
+  assert.equal(nodes(initial).some(node => node.type === 'button' && /核对|解除保护/.test(text(node))), false);
+  await submit(await chooseImage(app)).props.onClick();
+  assert.equal(reviewButton(app.render()), undefined);
+  const unknown = await reviewNeeded();
+  assert.ok(reviewButton(unknown.render()));
+  assert.ok(button(unknown.render(), '打开草稿箱'));
+  const blocked = page({ save: async () => ({ ok: false, state: 'busy', message: '有未核对的草稿任务保护；检查草稿箱后，可在工作台点「核对后解除保护」，或在扩展弹窗解除提交保护。', published: false }) });
+  await submit(await chooseImage(blocked)).props.onClick();
+  const blockedTree = blocked.render();
+  assert.ok(reviewButton(blockedTree));
+  assert.match(text(card(blockedTree, 'xiaohongshu')), /为防止重复保存，这次没有提交/);
+  assert.doesNotMatch(text(blockedTree), /扩展弹窗/);
+  const busy = page({ save: async () => ({ ok: false, state: 'busy', message: '已有浏览器任务正在进行。', published: false }) });
+  await submit(await chooseImage(busy)).props.onClick();
+  assert.equal(reviewButton(busy.render()), undefined);
+});
+
+test('manual review prepares, confirms exact warning, commits once and clears the stale warning', async () => {
+  const app = await reviewNeeded();
+  await reviewButton(app.render()).props.onClick();
   assert.deepEqual(app.clientCalls.filter(call=>call[0].startsWith('review')).map(call=>call[0]),['review_prepare','review']);
   assert.equal(app.clientCalls.find(call=>call[0]==='review')[1],'123e4567-e89b-42d3-a456-426614174000');
-  assert.match(app.confirmations[0],/^我已在当前浏览器草稿箱核对上次任务。此操作仅记录人工核对，不会重试、上传、删除或发布。$/);
-  assert.match(text(nodes(app.render()).find(node=>node.props['aria-live']==='polite')),/已解除提交保护/);
+  assert.equal(app.confirmations.at(-1),'请确认你已在小红书草稿箱看过上一篇（已存在或确实没有保存）。此操作只解除重复保存保护，不会重试、上传、删除或发布。');
+  const after = app.render();
+  assert.match(text(nodes(after).find(node=>node.props['aria-live']==='polite')),/已解除提交保护/);
+  assert.equal(reviewButton(after), undefined);
+  const state = card(after, 'xiaohongshu');
+  assert.match(state.props.className, /pv-pubstate ok/);
+  assert.match(text(state), /可以重新点「存小红书草稿」/);
+  assert.doesNotMatch(text(state), /勿重复提交/);
+  assert.equal(app.clientCalls.filter(call=>call[0]==='draft').length, 1);
 });
 
 test('manual review cancel makes zero commit and no pending work is reported directly', async () => {
-  const cancelled=page({confirm:false});
-  await button(cancelled.render(),'核对后解除保护').props.onClick();
+  const cancelled = await reviewNeeded({ confirm: message => !message.startsWith('请确认你已在小红书草稿箱') });
+  await reviewButton(cancelled.render()).props.onClick();
   assert.equal(cancelled.clientCalls.filter(call=>call[0]==='review_prepare').length,1);
   assert.equal(cancelled.clientCalls.filter(call=>call[0]==='review').length,0);
-  const empty=page({prepareReview:async()=>({ok:true,state:'reviewed',message:'当前没有待核对任务',published:false})});
-  await button(empty.render(),'核对后解除保护').props.onClick();
-  assert.equal(empty.confirmations.length,0);
+  assert.ok(reviewButton(cancelled.render()), 'cancel keeps the review control');
+  const empty = await reviewNeeded({ prepareReview: async()=>({ok:true,state:'reviewed',message:'当前没有待核对任务',published:false}) });
+  const confirmationsBefore = empty.confirmations.length;
+  await reviewButton(empty.render()).props.onClick();
+  assert.equal(empty.confirmations.length, confirmationsBefore);
   assert.equal(empty.clientCalls.filter(call=>call[0]==='review').length,0);
   assert.match(text(nodes(empty.render()).find(node=>node.props['aria-live']==='polite')),/没有待核对任务/);
+  assert.equal(reviewButton(empty.render()), undefined);
 });
 
 test('pending manual review owns the client lock and unknown results are not retried', async () => {
   let release;const gate=new Promise(resolve=>{release=resolve});
-  const app=page({prepareReview:()=>gate});const initial=app.render();
-  const pending=button(initial,'核对后解除保护').props.onClick();
+  const app = await reviewNeeded({ prepareReview: () => gate });
+  const initial = app.render();
+  const pending = reviewButton(initial).props.onClick();
   await button(initial,'连接当前浏览器').props.onClick();
   const mid=app.render();
-  assert.equal(button(mid,'正在核对保护').props.disabled,true);
+  assert.equal(button(mid,'正在解除保护').props.disabled,true);
   assert.equal(button(mid,'连接当前浏览器').props.disabled,true);
   assert.equal(button(mid,'查看小红书草稿').props.disabled,true);
+  assert.equal(button(mid,'打开草稿箱').props.disabled,true);
   assert.equal(app.clientCalls.filter(call=>call[0]==='status').length,0);
   release({ok:false,state:'unconfirmed',message:'解除保护结果未确认，请刷新状态核对；不会自动重试',published:false});
   await pending;
   assert.equal(app.clientCalls.filter(call=>call[0]==='review_prepare').length,1);
   assert.equal(app.clientCalls.filter(call=>call[0]==='review').length,0);
   assert.match(text(nodes(app.render()).find(node=>node.props['aria-live']==='polite')),/不会自动重试/);
+  assert.ok(reviewButton(app.render()), 'unconfirmed review keeps the control');
 });
 
 test('image draft uses the client helper without a server login or publishNow', async () => {

@@ -122,11 +122,20 @@ async function loadClientDraftImages(paths: string[], signal?: AbortSignal): Pro
   return images;
 }
 
+// Duplicate-save protection is only surfaced when a draft result is unknown or a submit was blocked by it.
+function isProtectionBusy(result: ClientBrowserResult): boolean {
+  return result.state === 'busy' && result.message.includes('未核对');
+}
+function needsDraftReview(result: ClientBrowserResult): boolean {
+  return result.state === 'unconfirmed' || isProtectionBusy(result);
+}
+
 function clientDraftMessage(result: ClientBrowserResult): { status: 'ok' | 'fail'; msg: string } {
   if (result.published !== false) return { status: 'fail', msg: '未确认保存至小红书草稿。请先查看小红书草稿，勿重复提交。' };
   if (result.ok && result.state === 'saved') return { status: 'ok', msg: '已保存至当前浏览器的小红书草稿，未公开发布。这是本次新草稿。' };
   if (result.ok && result.state === 'record_found') return { status: 'ok', msg: '草稿箱已核对到本次新增记录；请打开检查正文和图片。未公开发布。' };
   if (result.state === 'unconfirmed') return { status: 'fail', msg: result.message.startsWith('保存结果未确认：') && result.message.includes('勿重复提交') ? result.message : '保存结果未确认。请先查看小红书草稿，勿重复提交。' };
+  if (isProtectionBusy(result)) return { status: 'fail', msg: '上一次保存的结果还没确认，为防止重复保存，这次没有提交。' };
   if (result.state === 'auth_required') return { status: 'fail', msg: result.message.trim() || '请在当前浏览器打开的小红书创作者页面登录后再保存草稿。' };
   if (result.state === 'unavailable') return { status: 'fail', msg: result.message.trim() || CLIENT_MISSING };
   return { status: 'fail', msg: result.message.trim() || '保存小红书草稿失败。请先查看小红书草稿，勿重复提交。' };
@@ -172,6 +181,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
   const [pubSmsBusy, setPubSmsBusy] = useState(false);
   const [clientBusy, setClientBusy] = useState<'connect' | 'open' | 'draft' | 'review' | ''>('');
   const [clientMsg, setClientMsg] = useState(CLIENT_MISSING);
+  const [needsReview, setNeedsReview] = useState(false);
   const clientAlive = useRef(true);
   const clientAbort = useRef<{ abort: () => void; signal: AbortSignal } | null>(null);
   const clientLock = useRef(false);
@@ -349,9 +359,11 @@ export default function PublishPage({ persona }: PublishPageProps) {
             if (clientAlive.current) setPub((r) => ({ ...r, [t.key]: { status: 'fail', msg: error instanceof Error ? error.message : '图片下载失败，未保存小红书草稿' } }));
             continue;
           }
+          setNeedsReview(false);
           const draft = await saveClientXhsDraft({ title, body: effective(t.key), tags: parseTags(tags), images }, clientAbort.current?.signal);
           if (!clientAlive.current) continue;
           setPub((r) => ({ ...r, [t.key]: clientDraftMessage(draft) }));
+          setNeedsReview(needsDraftReview(draft));
           continue;
         }
         const res = await publishNow(t.key, { title, body: effective(t.key), media: selectedMedia, tags });
@@ -481,6 +493,11 @@ export default function PublishPage({ persona }: PublishPageProps) {
     }
   };
 
+  const markReviewed = (message: string) => {
+    setNeedsReview(false);
+    setClientMsg(message);
+    setPub((r) => ({ ...r, xiaohongshu: { status: 'ok', msg: '已确认上一篇并解除重复保存保护，可以重新点「存小红书草稿」。未重试、上传、删除或发布。' } }));
+  };
   const reviewClientDraft = async () => {
     if (clientLock.current) return;
     clientLock.current = true;
@@ -489,18 +506,19 @@ export default function PublishPage({ persona }: PublishPageProps) {
       const prepared = await prepareClientDraftReview(clientAbort.current?.signal);
       if (!clientAlive.current) return;
       if (prepared.ok === true && prepared.state === 'reviewed') {
-        setClientMsg(prepared.message.trim() || '当前没有待核对任务。');
+        markReviewed(prepared.message.trim() || '当前没有待核对任务。');
         return;
       }
       if (prepared.ok !== true || prepared.state !== 'review_ready' || !prepared.reviewToken) {
         setClientMsg(prepared.message.trim() || '解除保护结果未确认，请刷新状态核对；不会自动重试');
         return;
       }
-      const accepted = window.confirm('我已在当前浏览器草稿箱核对上次任务。此操作仅记录人工核对，不会重试、上传、删除或发布。');
+      const accepted = window.confirm('请确认你已在小红书草稿箱看过上一篇（已存在或确实没有保存）。此操作只解除重复保存保护，不会重试、上传、删除或发布。');
       if (!accepted) return;
       const reviewed = await confirmClientDraftReview(prepared.reviewToken, clientAbort.current?.signal);
       if (!clientAlive.current) return;
-      setClientMsg(reviewed.message.trim() || (reviewed.ok && reviewed.state === 'reviewed' ? '已解除提交保护。' : '解除保护结果未确认，请刷新状态核对；不会自动重试'));
+      if (reviewed.ok === true && reviewed.state === 'reviewed') markReviewed(reviewed.message.trim() || '已解除提交保护。');
+      else setClientMsg(reviewed.message.trim() || '解除保护结果未确认，请刷新状态核对；不会自动重试');
     } catch {
       if (clientAlive.current) setClientMsg('解除保护结果未确认，请刷新状态核对；不会自动重试');
     } finally {
@@ -529,9 +547,6 @@ export default function PublishPage({ persona }: PublishPageProps) {
         </button>
         <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={openClientDrafts}>
           {clientBusy === 'open' ? '正在打开草稿…' : '查看小红书草稿'}
-        </button>
-        <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={reviewClientDraft}>
-          {clientBusy === 'review' ? '正在核对保护…' : '核对后解除保护'}
         </button>
         <a className="btn btn-sm" href="/api/browser-extension/download" download>下载浏览器连接器</a>
         <p className="pv-hint" aria-live="polite">{clientMsg}</p>
@@ -629,6 +644,19 @@ export default function PublishPage({ persona }: PublishPageProps) {
                 <div className={`pv-pubstate ${ps.status}`}>
                   {ps.status === 'publishing' && <span className="live-pulse" />}
                   {ps.status === 'ok' ? '✅ ' : ps.status === 'fail' ? '⚠️ ' : ''}{ps.msg}
+                </div>
+              )}
+              {p.key === 'xiaohongshu' && needsReview && (
+                <div className="pv-review">
+                  <p className="pv-hint">请先打开小红书草稿箱，看看上一篇是否已经保存。确认后点「我已核对，继续」，再重新提交。</p>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={openClientDrafts}>
+                      {clientBusy === 'open' ? '正在打开草稿箱…' : '打开草稿箱'}
+                    </button>
+                    <button type="button" className="btn btn-sm" disabled={!!clientBusy} onClick={reviewClientDraft}>
+                      {clientBusy === 'review' ? '正在解除保护…' : '我已核对，继续'}
+                    </button>
+                  </div>
                 </div>
               )}
               <div className="pv-foot">
