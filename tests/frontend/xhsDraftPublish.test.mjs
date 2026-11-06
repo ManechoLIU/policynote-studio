@@ -99,16 +99,14 @@ async function ready(app, withMedia = true) {
   return app.render();
 }
 
-test('XHS-only action and confirmation save a platform draft without promising public publication', async () => {
+test('XHS-only action saves a platform draft on one click without a confirmation or public promise', async () => {
   const app = setup(['xiaohongshu'], { xiaohongshu: { ok: true, outcome: 'draft_saved', published: false, message: '已保存至小红书草稿，未公开发布' } });
   const tree = await ready(app);
   assert.match(text(tree), /仅存.*小红书.*草稿/);
   assert.equal(text(submitButton(tree)).trim(), '存小红书草稿');
   await submitButton(tree).props.onClick();
   assert.equal(app.prechecks(), 1);
-  assert.match(app.confirmations[0], /小红书.*草稿/);
-  assert.match(app.confirmations[0], /未公开发布|不会公开发布/);
-  assert.equal(app.confirmations[0].includes('【真实发布】'), false);
+  assert.equal(app.confirmations.length, 0);
   const result = status(app.render(), 'xiaohongshu');
   assert.equal(result.props.className, 'pv-pubstate ok');
   assert.match(text(result), /已保存至小红书草稿，未公开发布/);
@@ -209,10 +207,15 @@ test('local scheduling is labeled separately and never submits a platform draft'
   assert.match(text(app.render()), /本地排期草稿/);
 });
 
-test('cancel, login and media gates remain effective for XHS drafts', async () => {
-  const cancelled = setup(['xiaohongshu'], {}, { confirm: false });
+test('cancel gates public targets; login and media gates remain effective for XHS drafts', async () => {
+  const cancelled = setup(['xiaohongshu', 'douyin'], {}, { confirm: false });
   await submitButton(await ready(cancelled)).props.onClick();
+  assert.equal(cancelled.confirmations.length, 1);
   assert.equal(cancelled.calls.length, 0);
+  const draftOnly = setup(['xiaohongshu'], { xiaohongshu: { ok: true, outcome: 'draft_saved', published: false, message: '已保存至小红书草稿，未公开发布' } }, { confirm: false });
+  await submitButton(await ready(draftOnly)).props.onClick();
+  assert.equal(draftOnly.confirmations.length, 0);
+  assert.equal(draftOnly.calls.length, 1);
   const loggedOut = setup(['xiaohongshu'], {}, { loggedIn: false });
   await submitButton(await ready(loggedOut)).props.onClick();
   assert.equal(loggedOut.calls.length, 0);

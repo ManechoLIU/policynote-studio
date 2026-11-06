@@ -162,6 +162,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
   const [toast, setToast] = useState('');
   const [adapting, setAdapting] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [bgChecking, setBgChecking] = useState(false);
   const [checkResult, setCheckResult] = useState('');
   const adaptCtl = useRef<AbortController | null>(null);
 
@@ -303,7 +304,7 @@ export default function PublishPage({ persona }: PublishPageProps) {
     } finally { setChecking(false); }
   };
 
-  // D. 平台提交（小红书/公众号仅存平台草稿，其他平台公开发布；二次确认）
+  // D. 平台提交（小红书/公众号仅存平台草稿，点击即提交；含公开发布平台时预检后二次确认）
   const publishAll = async () => {
     if (empty || publishing || checking || publishLock.current) return;
     const usesClient = platforms.includes('xiaohongshu') && !selectedMedia.some(isVideoPath);
@@ -317,22 +318,35 @@ export default function PublishPage({ persona }: PublishPageProps) {
       showToast('所选平台暂不支持一键发布（B站请用「复制」或终端 biliup）');
       return;
     }
-    setChecking(true);
-    try {
-      setCheckResult(await performPrecheck());
-    } catch (e) {
-      setCheckResult(`预检失败：${e instanceof Error ? e.message : '未知错误'}\n\n预检仅用于提醒，不会阻止你继续提交。`);
-    } finally {
-      setChecking(false);
+    const draftOnly = targets.every((target) => DRAFT_PLATFORMS.has(target.key));
+    if (draftOnly) {
+      // Drafts are never public: clicking save is the submission. The advisory precheck runs alongside
+      // the save instead of delaying it behind a confirmation dialog.
+      if (!bgChecking) {
+        setBgChecking(true);
+        void performPrecheck()
+          .then((report) => { if (clientAlive.current) setCheckResult(report); })
+          .catch((e) => { if (clientAlive.current) setCheckResult(`预检失败：${e instanceof Error ? e.message : '未知错误'}\n\n预检仅用于提醒，不会阻止你继续提交。`); })
+          .finally(() => { if (clientAlive.current) setBgChecking(false); });
+      }
+    } else {
+      setChecking(true);
+      try {
+        setCheckResult(await performPrecheck());
+      } catch (e) {
+        setCheckResult(`预检失败：${e instanceof Error ? e.message : '未知错误'}\n\n预检仅用于提醒，不会阻止你继续提交。`);
+      } finally {
+        setChecking(false);
+      }
+      const publicTargets = targets.filter((target) => !DRAFT_PLATFORMS.has(target.key));
+      const draftTargets = targets.filter((target) => DRAFT_PLATFORMS.has(target.key));
+      const okToSend = window.confirm(
+        `发布前预检已执行，结果已显示在页面中。人设评分只做提醒，不会阻止提交。\n\n` +
+        (publicTargets.length ? `公开发布：${publicTargets.map((target) => target.label).join('、')}。\n` : '') +
+        (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。小红书图文草稿保存在当前日常 Chrome 的小红书草稿箱。视频仍走原有服务端通道，那不是日常使用的 Chrome。\n` : '') +
+        `确定继续？`);
+      if (!okToSend) { publishLock.current = false; if (usesClient) { clientLock.current = false; setClientBusy(''); } return; }
     }
-    const publicTargets = targets.filter((target) => !DRAFT_PLATFORMS.has(target.key));
-    const draftTargets = targets.filter((target) => DRAFT_PLATFORMS.has(target.key));
-    const okToSend = window.confirm(
-      `发布前预检已执行，结果已显示在页面中。人设评分只做提醒，不会阻止提交。\n\n` +
-      (publicTargets.length ? `公开发布：${publicTargets.map((target) => target.label).join('、')}。\n` : '') +
-      (draftTargets.length ? `仅存平台草稿：${draftTargets.map((target) => target.label).join('、')}；这些草稿不会公开发布。小红书图文草稿保存在当前日常 Chrome 的小红书草稿箱。视频仍走原有服务端通道，那不是日常使用的 Chrome。\n` : '') +
-      `确定继续？`);
-    if (!okToSend) { publishLock.current = false; if (usesClient) { clientLock.current = false; setClientBusy(''); } return; }
 
     setPublishing(true);
     for (const t of targets) {
@@ -682,8 +696,8 @@ export default function PublishPage({ persona }: PublishPageProps) {
               <IconSkills size={14} /> 一键适配各平台
             </button>
           )}
-          <button className="btn btn-sm" disabled={empty || checking || adapting} onClick={check}>
-            <IconCheck size={14} /> {checking ? '预检中…' : '发布前预检'}
+          <button className="btn btn-sm" disabled={empty || checking || bgChecking || adapting} onClick={check}>
+            <IconCheck size={14} /> {checking || bgChecking ? '预检中…' : '发布前预检'}
           </button>
           <button className="btn btn-sm" disabled={empty} onClick={() => addToCalendar(platforms[0] || 'xiaohongshu')}>
             <IconCalendar size={14} /> 存本地草稿并排期

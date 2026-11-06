@@ -181,7 +181,7 @@ function page(options = {}) {
     '../lib/api': {
       fetchAccounts: async () => (options.platforms ?? ['xiaohongshu']).map(platform => ({ platform, loggedIn: options.loggedIn !== false })),
       fetchOutputs: async () => options.files ?? [{ type: 'file', kind: 'image', path: 'cover.png', name: 'cover.png' }],
-      runAgent: async () => ({ response: '未见明显风险' }),
+      runAgent: options.runAgent || (async () => ({ response: '未见明显风险' })),
       executeSkill: async () => ({ response: '人设一致' }),
       publishNow: async (platform, payload) => { publishes.push({ platform, payload }); return options.publish?.[platform] ?? { ok: true, message: '完成' }; },
       publishStatus: async () => { throw new Error('no poll'); },
@@ -359,7 +359,7 @@ test('image draft uses the client helper without a server login or publishNow', 
   const tree = await chooseImage(app);
   await submit(tree).props.onClick();
   await settle();
-  assert.equal(app.confirmations.length, 1);
+  assert.equal(app.confirmations.length, 0);
   assert.equal(app.publishes.length, 0);
   assert.equal(app.clientCalls.filter(call => call[0] === 'draft').length, 1);
   const payload = app.clientCalls.find(call => call[0] === 'draft')[1];
@@ -493,4 +493,16 @@ test('unconfirmed receipt diagnosis remains a failure and is visible without ret
  const rendered=card(app.render(),'xiaohongshu');
  assert.match(rendered.props.className,/pv-pubstate fail/);assert.match(text(rendered),/保存前12篇，当前13篇/);
  assert.equal(app.clientCalls.filter(call=>call[0]==='draft').length,1);
+});
+
+test('draft-only save starts immediately and is not held behind a slow advisory precheck', async () => {
+  const app = page({ runAgent: () => new Promise(() => {}) });
+  await submit(await chooseImage(app)).props.onClick();
+  await settle();
+  assert.equal(app.confirmations.length, 0);
+  assert.equal(app.clientCalls.filter(call => call[0] === 'draft').length, 1);
+  const tree = app.render();
+  assert.match(text(card(tree, 'xiaohongshu')), /已保存至当前浏览器的小红书草稿/);
+  assert.equal(submit(tree).props.disabled, false);
+  assert.equal(button(tree, '预检中').props.disabled, true);
 });
