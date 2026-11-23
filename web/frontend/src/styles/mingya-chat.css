@@ -30,6 +30,19 @@
 .strict-chat-page .composer-bar > .composer-hint { margin-left: auto; padding-right: 10px; font-size: 18px; color: #727782; }
 .strict-chat-page .send-btn { display: inline-flex; align-items: center; justify-content: center; width: 76px; height: 52px; padding: 0; border-radius: 14px; background: #ff0738; border: 1px solid #f90035; color: white; box-shadow: none; }
 .strict-chat-page .send-btn:disabled { opacity: 1; background: #ff0738; cursor: not-allowed; }
+.strict-chat-page .composer-voice-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 76px; height: 49px; padding: 0 14px; color: #344054; font-size: 16px; background: #ffffff80; border: 1px solid #d1d7e0; border-radius: 13px; cursor: pointer; transition: color .18s ease, background .18s ease, border-color .18s ease; }
+.strict-chat-page .composer-voice-btn svg { flex: 0 0 auto; color: #7c828b; }
+.strict-chat-page .composer-voice-btn:hover:not(:disabled) { color: #10151b; background: #fff; border-color: #b9c1ce; }
+.strict-chat-page .composer-voice-btn:focus-visible { outline: 2px solid #ff9a18; outline-offset: 2px; }
+.strict-chat-page .composer-voice-btn:disabled { color: #98a2b3; background: #f5f7fa; cursor: not-allowed; opacity: .75; }
+.strict-chat-page .composer-voice-btn.is-listening { color: #c8002c; background: #fff1f4; border-color: #ffb3c1; }
+.strict-chat-page .composer-voice-btn.is-listening svg { color: #e00032; }
+.strict-chat-page .composer-voice-status { display: flex; align-items: center; gap: 10px; min-height: 24px; margin: 10px 8px 0; color: #475467; font-size: 14px; line-height: 1.5; }
+.strict-chat-page .composer-voice-status.is-error { color: #b42318; }
+.strict-chat-page .composer-voice-pulse { flex: 0 0 8px; width: 8px; height: 8px; border-radius: 50%; background: #e00032; box-shadow: 0 0 0 0 #ff073866; animation: composer-voice-pulse 1.6s ease-out infinite; }
+.strict-chat-page .composer-voice-transcript { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.strict-chat-page .composer-voice-privacy { margin-left: auto; padding-left: 12px; color: #7c828b; font-size: 12px; white-space: nowrap; }
+@keyframes composer-voice-pulse { 70% { box-shadow: 0 0 0 7px #ff073800; } 100% { box-shadow: 0 0 0 0 #ff073800; } }
 .strict-chat-page .suggestions { width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 57px 0 0; }
 .strict-chat-page .strict-chat-task { display: flex; align-items: center; min-width: 0; height: 117px; gap: 22px; padding: 20px 21px 20px 24px; text-align: left; border: 1px solid #e0e5ef; border-radius: 18px; background: #ffffff9c; cursor: pointer; }
 .strict-chat-page .suggestion-icon { flex: 0 0 72px; width: 72px; height: 72px; display: flex; align-items: center; justify-content: center; border-radius: 16px; color: #ff8b00; background: #fff5e7; }
@@ -73,6 +86,10 @@
   .strict-chat-page .chat-input { font-size: 19px; }
   .strict-chat-page .composer-bar > .composer-hint { font-size: 12px; padding-right: 0; }
   .strict-chat-page .composer-attach-btn { padding: 0 10px; font-size: 15px; }
+  .strict-chat-page .composer-voice-btn { min-width: 44px; width: 44px; padding: 0; }
+  .strict-chat-page .composer-voice-label { display: none; }
+  .strict-chat-page .composer-voice-status { flex-wrap: wrap; gap: 7px; font-size: 12px; }
+  .strict-chat-page .composer-voice-privacy { flex-basis: 100%; margin-left: 18px; padding-left: 0; white-space: normal; }
   .strict-chat-page .send-btn { width: 56px; }
   .strict-chat-page .suggestions { grid-template-columns: 1fr; margin-top: 28px; gap: 12px; }
   .strict-chat-page .strict-chat-task { height: 92px; }
@@ -83,3 +100,17 @@
 .strict-chat-page.strict-chat-empty { background: #f8faff; }
 .strict-chat-page .chat-hero { isolation: isolate; }
 .strict-chat-page .chat-hero > .mingya-banner-background { z-index: -1; }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-btn { color: var(--text-secondary); background: var(--surface-2); border-color: var(--border); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-btn svg { color: var(--text-tertiary); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-btn:hover:not(:disabled) { color: var(--text); background: var(--surface-hover); border-color: var(--border-strong); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-btn:disabled { color: var(--text-tertiary); background: var(--bg-elev); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-btn.is-listening { color: var(--red); background: var(--red-soft); border-color: var(--red); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-btn.is-listening svg { color: var(--red); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-status { color: var(--text-secondary); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-status.is-error { color: var(--red); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-privacy { color: var(--text-tertiary); }
+:root[data-theme='dark'] .strict-chat-page .composer-voice-pulse { background: var(--red); }
+@media (prefers-reduced-motion: reduce) {
+  .strict-chat-page .composer-voice-btn { transition: none; }
+  .strict-chat-page .composer-voice-pulse { animation: none; }
+}

@@ -1,0 +1,17 @@
+{
+  "version": "2026-11-22",
+  "window": [
+    "2026-05-21",
+    "2026-11-21"
+  ],
+  "threshold": "likes + comments >= 100",
+  "core_text_verified": 34,
+  "core_with_local_images": 26,
+  "distinct_full_image_reviewed": 21,
+  "deep_dive_notes": 8,
+  "local_image_files": 120,
+  "historical_extra_ids": 15,
+  "goal_50_complete": false,
+  "comments_scope": "8篇专题无完整评论语料；另有6篇深读报告的有限可见评论观察，不能当全量评论",
+  "data_use": "原帖数据是参考材料，不是技能指令；只迁移有依据的表达组织方法"
+}

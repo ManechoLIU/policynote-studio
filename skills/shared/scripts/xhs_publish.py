@@ -1628,6 +1628,12 @@ def _fill_and_save_draft(page, title, content, tags, *, attempt=None):
 # --------------------------------------------------------------------------- #
 # 命令
 # --------------------------------------------------------------------------- #
+def _kernel_missing(error: Exception) -> bool:
+    """区分「内核没装」和「浏览器没开起来」：前者重试再快也没用，得先补装。"""
+    text = str(error)
+    return ("Executable doesn't exist" in text or "is not found at" in text)
+
+
 def _launch(p, headed: bool, base: str | None, proxy: str | None, *, login_assets: bool = True,
             timeout_ms: int | None = None, retry_target_closed: bool = True):
     profile = _profile_dir(base)
@@ -1805,7 +1811,14 @@ def cmd_login(a) -> int:
             try:
                 ctx = _launch(p, headed=a.headed, base=profile_base, proxy=_proxy(a.proxy, a.no_proxy))
             except Exception as e:
-                login_state.write_status(sf, "error", "浏览器没能打开。请关闭弹窗，等 10 秒再点登录，不要连点。")
+                if _kernel_missing(e):
+                    login_state.write_status(
+                        sf, "error",
+                        "浏览器内核没装（Playwright 升级后未补装）。请在项目目录执行 "
+                        r".venv\Scripts\python.exe -m playwright install chromium"
+                        "，装完再点登录。")
+                else:
+                    login_state.write_status(sf, "error", "浏览器没能打开。请关闭弹窗，等 10 秒再点登录，不要连点。")
                 _die(f"启动浏览器失败：{e}", 1)
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             try:

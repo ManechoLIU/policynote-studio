@@ -4350,7 +4350,10 @@ async def _start_login(platform: str, restart: bool = False, scope: str = 'defau
                '--qr-out', str(qr), '--status-file', str(status), '--timeout', str(LOGIN_TIMEOUT)]
         if scope == 'community':
             cmd.append('--community-only')
-        if sys.platform == 'darwin':
+        if sys.platform in ('darwin', 'win32'):
+            # Windows 桌面也有显示环境：无头 Chromium 打开小红书必被 300012 风控拦掉
+            # （实测无头真 Chrome 同样被拦、有头才出码）。有头窗口 + 网页里同时给二维码，
+            # 两条路都能扫；内核优先 Cloak，缺了退回本机 Chrome/Edge（见 _browser_channel）。
             cmd.append('--headed')
     elif backend == 'biliup':
         # B站：TV 端扫码登录 API 生成二维码 + 写 biliup cookie（biliup login 需真终端，前端用不了）

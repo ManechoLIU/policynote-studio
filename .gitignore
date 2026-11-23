@@ -30,6 +30,7 @@ Thumbs.db
 
 # OpenClaw runtime
 .openclaw/
+.workbuddy/
 
 # Outputs (keep directory structure via .gitkeep, ignore actual content)
 outputs/**/*
