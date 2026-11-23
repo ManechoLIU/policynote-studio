@@ -5,7 +5,9 @@ import BrushEntry from './BrushEntry';
 import type { ChatSession, ChatMessage, StreamState } from '../lib/store';
 import { uploadFiles, adoptOversize } from '../lib/api';
 import type { UploadedFile } from '../lib/api';
-import { IconStop, IconFile, IconSend, IconProfile, IconChevron, IconCompass, IconEdit } from './icons';
+import { insertTranscript } from '../lib/speechInput';
+import { useSpeechInput } from '../lib/useSpeechInput';
+import { IconStop, IconFile, IconSend, IconProfile, IconChevron, IconCompass, IconEdit, IconMic } from './icons';
 import { BannerBackground, ReferenceArtwork, SectionMark } from './MingyaPrimitives';
 import '../styles/mingya-chat.css';
 
@@ -48,9 +50,28 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isComposingRef = useRef(false);
+  const voiceCaretRef = useRef({ start: 0, end: 0 });
+  const pendingVoiceCaretRef = useRef<number | null>(null);
+
+  const handleVoiceFinal = (text: string) => {
+    setInput((current) => {
+      const { start, end } = voiceCaretRef.current;
+      const inserted = insertTranscript(current, start, end, text);
+      voiceCaretRef.current = { start: inserted.caret, end: inserted.caret };
+      pendingVoiceCaretRef.current = inserted.caret;
+      return inserted.value;
+    });
+  };
+  const voice = useSpeechInput({ onFinal: handleVoiceFinal });
 
   const isStreaming = !!stream;
   const isEmpty = session.messages.length === 0 && !isStreaming;
+
+  const sendQuickTask = (prompt: string) => {
+    if (isStreaming) return;
+    voice.cancel();
+    onSend(prompt);
+  };
 
   useEffect(() => {
     fetch('/api/upload/limits').then((r) => r.json())
@@ -108,7 +129,22 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     }
   }, [input]);
 
+  useEffect(() => {
+    const caret = pendingVoiceCaretRef.current;
+    if (caret === null) return;
+    pendingVoiceCaretRef.current = null;
+    const frame = requestAnimationFrame(() => {
+      const el = textareaRef.current;
+      if (!el) return;
+      const nextCaret = Math.min(caret, el.value.length);
+      el.focus();
+      el.setSelectionRange(nextCaret, nextCaret);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [input]);
+
   const handleSend = () => {
+    voice.cancel();
     const trimmed = input.trim();
     if ((!trimmed && attachments.length === 0) || isStreaming || uploading) return;
     // 附件通过结构化字段发送；用户消息气泡只显示用户实际输入的文字。
@@ -116,6 +152,25 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
     setInput('');
     setAttachments([]);
   };
+
+  const toggleVoiceInput = () => {
+    if (!voice.isSupported) return;
+    if (voice.isListening) {
+      voice.stop();
+      return;
+    }
+    const el = textareaRef.current;
+    voiceCaretRef.current = el
+      ? { start: el.selectionStart, end: el.selectionEnd }
+      : { start: input.length, end: input.length };
+    voice.start();
+  };
+  const voiceButtonLabel = !voice.isSupported
+    ? '当前浏览器不支持语音输入'
+    : voice.isListening ? '停止语音输入' : '开始语音输入';
+  const voiceButtonTitle = voice.isSupported
+    ? `${voiceButtonLabel}（中文）`
+    : '当前浏览器不支持语音输入，请使用 Chrome 或 Edge';
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 输入法确认候选词/英文的回车交给输入法处理，不能触发发送。
@@ -148,7 +203,13 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
           className="chat-input"
           placeholder={dragOver ? '松手上传素材…' : hero ? '写下主题，或添加你的创作素材…' : '发消息…（Enter 发送，Shift+Enter 换行，可拖入/粘贴素材）'}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => {
+            setInput(e.target.value);
+            voiceCaretRef.current = { start: e.target.selectionStart, end: e.target.selectionEnd };
+          }}
+          onSelect={(e) => {
+            voiceCaretRef.current = { start: e.currentTarget.selectionStart, end: e.currentTarget.selectionEnd };
+          }}
           onCompositionStart={() => { isComposingRef.current = true; }}
           onCompositionEnd={() => { isComposingRef.current = false; }}
           onBlur={() => { isComposingRef.current = false; }}
@@ -158,6 +219,23 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
           autoFocus={hero}
         />
       </div>
+      {(voice.isListening || voice.error) && (
+        <div
+          className={`composer-voice-status${voice.error ? ' is-error' : ''}`}
+          role={voice.error ? 'alert' : 'status'}
+          aria-live={voice.error ? 'assertive' : 'polite'}
+        >
+          {voice.error ? (
+            <span>{voice.error}</span>
+          ) : (
+            <>
+              <span className="composer-voice-pulse" aria-hidden="true" />
+              <span className="composer-voice-transcript">{voice.interimText || '请开始说话…'}</span>
+              <span className="composer-voice-privacy">语音由浏览器识别，可能联网处理，请勿口述敏感信息</span>
+            </>
+          )}
+        </div>
+      )}
       <input ref={fileInputRef} type="file" multiple hidden
         onChange={(e) => { if (e.target.files) doUpload(e.target.files); e.target.value = ''; }} />
       <div className="composer-bar">
@@ -166,7 +244,19 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m8 12 6.5-6.5a3.2 3.2 0 0 1 4.5 4.5L10 19a5 5 0 0 1-7-7l9-9" /><path d="m6 14 8-8" /></svg> {uploading ? '上传中…' : '上传附件'}
         </button>
         {!apiDirect && <BrushEntry onPick={(t) => { setInput(t); requestAnimationFrame(() => textareaRef.current?.focus()); }} />}
-        <span className="composer-hint">{isStreaming ? '生成中…' : '按 Enter 发送，Shift + Enter 换行'}</span>
+        <button
+          type="button"
+          className={`composer-voice-btn${voice.isListening ? ' is-listening' : ''}`}
+          onClick={toggleVoiceInput}
+          disabled={!voice.isSupported}
+          aria-label={voiceButtonLabel}
+          aria-pressed={voice.isListening}
+          title={voiceButtonTitle}
+        >
+          {voice.isListening ? <IconStop size={15} /> : <IconMic size={22} />}
+          <span className="composer-voice-label">{voice.isListening ? '停止' : '语音'}</span>
+        </button>
+        <span className="composer-hint">{voice.isListening ? '语音输入中…' : isStreaming ? '生成中…' : '按 Enter 发送，Shift + Enter 换行'}</span>
         {isStreaming ? (
           <button className="send-btn" onClick={onStop} title="停止生成"><IconStop size={15} /></button>
         ) : (
@@ -194,7 +284,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
           {inputBox(true)}
           <div className="suggestions">
             {QUICK_TASKS.map((s) => (
-              <button key={s.title} className="strict-chat-task" onClick={() => { if (!isStreaming) onSend(s.prompt); }}>
+              <button key={s.title} className="strict-chat-task" onClick={() => sendQuickTask(s.prompt)}>
                 <span className="suggestion-icon"><s.Icon size={42} /></span>
                 <span className="suggestion-body"><span className="suggestion-title">{s.title}</span><span className="suggestion-text">{s.description}</span></span>
                 <IconChevron size={22} />
@@ -205,7 +295,7 @@ export default function ChatPage({ apiDirect, session, stream, onSend, onStop, o
             <summary>更多原有任务</summary>
             <div className="chat-original-tasks">
               {SUGGESTIONS.filter((s) => !apiDirect || ['写小红书文案', '口播脚本'].includes(s.title)).map((s) => (
-                <button key={s.title} title={s.prompt} onClick={() => { if (!isStreaming) onSend(s.prompt); }}><span>{s.icon}</span>{s.title}</button>
+                <button key={s.title} title={s.prompt} onClick={() => sendQuickTask(s.prompt)}><span>{s.icon}</span>{s.title}</button>
               ))}
             </div>
           </details>
